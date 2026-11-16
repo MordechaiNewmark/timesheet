@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timesheet</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f1ea;--card:#fffdf8;--ink:#1d2420;--muted:#6b726c;--line:#e3ded2;--soft:#efeadf;
+  --accent:#1f6f5c;--accent-ink:#fff;--accent-soft:#dcebe5;--danger:#b3402e;--warn:#b9791c;
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 24px -14px rgba(40,35,20,.25);
+  --serif:"Fraunces",Georgia,serif;--sans:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#111613;--card:#192019;--ink:#e8ebe6;--muted:#93a099;--line:#28322d;--soft:#202922;
+  --accent:#4fb99b;--accent-ink:#0b1410;--accent-soft:#1c3029;--danger:#e0705c;--warn:#e0a84e;--shadow:none}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--sans);font-variant-numeric:tabular-nums}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.brand{font:600 26px/1 var(--serif);letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand i{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted)}
+.chip b{color:var(--ink);font-weight:700}
+nav.tabs{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:12px;margin-bottom:18px;width:fit-content;max-width:100%;overflow:auto}
+nav.tabs button{border:0;background:transparent;color:var(--muted);font:500 14px var(--sans);padding:8px 16px;border-radius:9px;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:var(--shadow);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+.card h2{font:600 18px var(--serif);margin:0 0 12px}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1 1 200px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+label.f{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;letter-spacing:.02em}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;min-width:0}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+input[type=checkbox]{width:auto;accent-color:var(--accent)}
+input[type=radio]{display:none}
+.btn{font:700 14px var(--sans);border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--danger)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 9px}
+.btn.ghost:hover{color:var(--ink);background:var(--soft)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.timer{text-align:center;padding:26px 18px}
+.timer.live{border-color:var(--accent);background:linear-gradient(180deg,var(--accent-soft),var(--card) 70%)}
+.clock{font:500 clamp(44px,12vw,72px)/1.05 var(--serif);letter-spacing:-.02em;margin:6px 0 16px}
+.timer .row{justify-content:center}
+.timer .fields{max-width:640px;margin:0 auto 14px;text-align:left}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.day{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 6px;font-weight:700}
+.day span{color:var(--muted);font-weight:500;font-size:13px}
+.entry{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.entry .t{flex:1;min-width:0}
+.entry .t b{display:block;font-weight:700}
+.entry .t span{color:var(--muted);font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.entry .d{font-weight:700;min-width:48px;text-align:right}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--muted);margin-left:6px;font-weight:500}
+table{border-collapse:collapse;width:100%}
+th,td{padding:10px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-size:12px;color:var(--muted);font-weight:700}
+th.today{color:var(--accent)}
+td.cell{cursor:pointer;border-radius:8px}
+td.cell:hover{background:var(--accent-soft)}
+td.zero{color:var(--line)}
+td.today{background:color-mix(in srgb,var(--accent-soft) 55%,transparent)}
+tfoot td{font-weight:700;border-bottom:0}
+.scroll{overflow-x:auto;margin:0 -6px;padding:0 6px}
+.bar{height:8px;background:var(--soft);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.bar.over>i{background:var(--danger)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.tile .v{font:600 28px var(--serif);margin-top:4px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.chips button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:99px;padding:6px 12px;font:500 13px var(--sans);cursor:pointer}
+.chips button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding-top:8px}
+.chart div{flex:1;background:var(--accent);border-radius:4px 4px 0 0;min-height:2px;opacity:.9}
+.chart div.z{background:var(--line);opacity:1}
+.chartx{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
+.proj{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.proj:first-of-type{border-top:0}
+.proj .grow{min-width:0}
+.proj.arch{opacity:.55}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.swatches label{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;display:block}
+.swatches input:checked+label{border-color:var(--ink)}
+.empty{text-align:center;padding:48px 18px}
+.empty h2{font-size:24px}
+#modal{position:fixed;inset:0;background:rgba(15,20,17,.5);display:none;align-items:flex-start;justify-content:center;padding:6vh 14px;overflow:auto;z-index:20}
+#modal.open{display:flex}
+.sheet{background:var(--card);border-radius:18px;padding:20px;width:100%;max-width:480px;border:1px solid var(--line)}
+.sheet.wide{max-width:640px}
+.sheet h3{font:600 20px var(--serif);margin:0 0 14px}
+.field{margin-bottom:12px}
+.err{color:var(--danger);font-size:13px;min-height:18px;margin:4px 0}
+.foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;display:none;gap:14px;align-items:center;z-index:30;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+#toast button{background:none;border:0;color:inherit;font:700 14px var(--sans);text-decoration:underline;cursor:pointer;padding:0}
+.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid var(--warn);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:14px}
+pre.out{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font:13px/1.5 ui-monospace,Menlo,monospace;max-height:50vh;overflow:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><i></i>Timesheet</div>
+    <div class="row" id="hdr"></div>
+  </header>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <main id="main"></main>
+</div>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+const KEY="timesheet.v1";
+const COLORS=["#1f6f5c","#c2562f","#3b6fb6","#b9891c","#8a4fa0","#c04a77","#4c8a2f","#5b6b78"];
+let storageOK=true;
+function defaults(){return {projects:[],entries:[],timer:null,settings:{currency:"$",target:40,weekStart:1}}}
+function load(){
+  try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);const d=defaults();return {projects:o.projects||[],entries:o.entries||[],timer:o.timer||null,settings:Object.assign(d.settings,o.settings||{})}}}
+  catch(e){storageOK=false}
+  return defaults();
+}
+let S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false}}
+try{localStorage.setItem(KEY+".t","1");localStorage.removeItem(KEY+".t")}catch(e){storageOK=false}
+
+const ui={tab:"track",wk:null,range:"week",from:"",to:"",inv:"",invNo:"",showAll:false};
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const pYmd=s=>{const a=s.split("-").map(Number);return new Date(a[0],a[1]-1,a[2])};
+const addDays=(s,n)=>{const d=pYmd(s);d.setDate(d.getDate()+n);return ymd(d)};
+const today=()=>ymd(new Date());
+const hm=secs=>{const m=Math.round(secs/60);return Math.floor(m/60)+":"+pad(m%60)};
+const clock=secs=>{secs=Math.max(0,Math.floor(secs));return Math.floor(secs/3600)+":"+pad(Math.floor(secs%3600/60))+":"+pad(secs%60)};
+const dec=secs=>(secs/3600).toFixed(2);
+const r2=n=>Math.round(n*100)/100;
+const money=n=>S.settings.currency+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const proj=id=>S.projects.find(p=>p.id===id);
+const wkStart=s=>{const d=pYmd(s);d.setDate(d.getDate()-((d.getDay()-S.settings.weekStart+7)%7));return ymd(d)};
+function nice(s){
+  const t=today();
+  if(s===t)return "Today";
+  if(s===addDays(t,-1))return "Yesterday";
+  return pYmd(s).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+}
+function parseDur(t){
+  t=String(t||"").trim().toLowerCase();if(!t)return null;
+  let m=t.match(/^(\d+):(\d{1,2})$/);if(m)return(+m[1]*60+ +m[2])*60;
+  m=t.match(/^(?:(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?\s*(?:(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?)?$/);
+  if(m&&(m[1]||m[2]))return Math.round(((+m[1]||0)*60+(+m[2]||0))*60);
+  if(/^\d+(\.\d+)?$/.test(t))return Math.round(+t*3600);
+  return null;
+}
+function entryAmt(e){const p=proj(e.projectId);return e.billable&&p?r2(e.secs/3600*(p.rate||0)):0}
+const sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+function csvCell(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function csvFor(list){
+  const rows=[["Date","Project","Client","Description","Hours","Billable","Rate","Amount"]];
+  list.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0).forEach(e=>{const p=proj(e.projectId)||{};rows.push([e.date,p.name||"",p.client||"",e.desc||"",dec(e.secs),e.billable?"yes":"no",p.rate||0,entryAmt(e).toFixed(2)])});
+  return rows.map(r=>r.map(csvCell).join(",")).join("\n");
+}
+
+/* ---------- file / clipboard ---------- */
+let DL=null;
+try{if(window.claude&&claude.use){claude.use("downloads").then(d=>{DL=d}).catch(()=>{})}}catch(e){}
+async function copyText(t,msg){
+  try{await navigator.clipboard.writeText(t);toast(msg||"Copied");return true}catch(e){return false}
+}
+async function saveFile(name,data){
+  if(DL){
+    try{await DL.save({filename:name,data:data});toast("Saved "+name);return}
+    catch(e){if(e&&e.code==="declined")return}
+  }
+  openModal("Copy your file",'<p class="muted small">Downloads are not available here. Copy this text and paste it into a file named <b>'+esc(name)+'</b>.</p><textarea id="raw" rows="12" readonly>'+esc(data)+'</textarea><div class="foot"><button class="btn" data-a="close">Close</button><button class="btn primary" data-a="copy-raw">Copy</button></div>',true);
+  setTimeout(()=>{const t=$("#raw");if(t)t.select()},30);
+}
+
+/* ---------- toast / modal ---------- */
+let toastT;
+function toast(msg,label,fn){
+  const t=$("#toast");t.innerHTML="<span>"+esc(msg)+"</span>"+(label?'<button id="tact">'+esc(label)+"</button>":"");
+  t.style.display="flex";clearTimeout(toastT);
+  if(label)$("#tact").onclick=()=>{fn();t.style.display="none"};
+  toastT=setTimeout(()=>{t.style.display="none"},label?6000:2200);
+}
+function openModal(title,body,wide){
+  const m=$("#modal");m.innerHTML='<div class="sheet'+(wide?" wide":"")+'" role="dialog" aria-modal="true"><h3>'+esc(title)+"</h3>"+body+"</div>";
+  m.classList.add("open");
+  const f=m.querySelector("input:not([type=radio]):not([type=checkbox]),select,textarea");if(f&&!wide)f.focus();
+}
+function closeModal(){$("#modal").classList.remove("open");$("#modal").innerHTML=""}
+function confirmModal(title,text,yesLabel,fn){
+  openModal(title,'<p>'+esc(text)+'</p><div class="foot"><button class="btn" data-a="close">Cancel</button><button class="btn danger" id="yes">'+esc(yesLabel)+"</button></div>");
+  $("#yes").onclick=()=>{closeModal();fn()};
+}
+
+/* ---------- stats ---------- */
+function weekRange(){const s=wkStart(ui.wk||today());return[s,addDays(s,6)]}
+function secsBetween(a,b,f){return sum(S.entries.filter(e=>e.date>=a&&e.date<=b&&(!f||f(e))),e=>e.secs)}
+function runningSecs(){return S.timer?(Date.now()-S.timer.start)/1000:0}
+
+/* ---------- views ---------- */
+function renderHeader(){
+  const w=wkStart(today());
+  const secs=secsBetween(w,addDays(w,6))+(S.timer&&S.timer.start>=pYmd(w).getTime()?runningSecs():0);
+  $("#hdr").innerHTML='<span class="chip">This week <b>'+hm(secs)+"</b> / "+S.settings.target+"h</span>";
+  const names={track:"Track",week:"Week",projects:"Projects",reports:"Reports"};
+  $("#tabs").innerHTML=Object.keys(names).map(k=>'<button role="tab" data-a="tab" data-v="'+k+'" aria-selected="'+(ui.tab===k)+'">'+names[k]+"</button>").join("");
+}
+function emptyState(){
+  return '<div class="card empty"><div class="eyebrow">Welcome</div><h2>Track time by project, get paid accurately.</h2><p class="muted" style="max-width:460px;margin:0 auto 18px">Add a project with your hourly rate, start the timer, and your week, totals and invoices take care of themselves.</p><div class="row" style="justify-content:center"><button class="btn primary" data-a="new-project">Add your first project</button><button class="btn" data-a="sample">Load sample data</button></div></div>';
+}
+function entryRow(e){
+  const p=proj(e.projectId)||{name:"(deleted)",color:"#999"};
+  return '<div class="entry"><span class="dot" style="background:'+p.color+'"></span><div class="t"><b>'+esc(p.name)+(e.billable?"":'<span class="tag" style="display:inline">non-billable</span>')+"</b><span>"+(esc(e.desc)||"No description")+'</span></div><div class="d">'+hm(e.secs)+'</div><button class="btn ghost sm" data-a="edit-entry" data-id="'+e.id+'">Edit</button><button class="btn ghost sm" data-a="del-entry" data-id="'+e.id+'" aria-label="Delete entry">✕</button></div>';
+}
+function viewTrack(){
+  if(!S.projects.length)return emptyState();
+  const act=S.projects.filter(p=>!p.archived),t=S.timer;
+  if(!act.length&&!t)return '<div class="card empty"><h2>All projects are archived</h2><button class="btn primary" data-a="new-project">Add a project</button></div>';
+  const opts=act.map(p=>'<option value="'+p.id+'"'+((t?t.projectId===p.id:false)?" selected":"")+">"+esc(p.name)+(p.client?" · "+esc(p.client):"")+"</option>").join("");
+  const tcur=t&&!act.find(p=>p.id===t.projectId)?'<option value="'+t.projectId+'" selected>'+esc((proj(t.projectId)||{}).name)+"</option>":"";
+  const td=secsBetween(today(),today());
+  let h='<section class="card timer'+(t?" live":"")+'"><div class="eyebrow">'+(t?"Tracking now":"Timer")+'</div><div class="clock" id="clock">'+clock(runningSecs())+'</div>'
+   +'<div class="fields grid2"><div><label class="f" for="tp">Project</label><select id="tp"'+(t?" disabled":"")+">"+tcur+opts+'</select></div><div><label class="f" for="td">What are you working on?</label><input id="td" placeholder="e.g. Homepage wireframes" value="'+esc(t?t.desc:"")+'" maxlength="140"></div></div>'
+   +'<div class="row"><label class="chk"><input type="checkbox" id="tb" '+((t?t.billable:true)?"checked":"")+(t?" disabled":"")+"> Billable</label>"
+   +(t?'<button class="btn primary" data-a="stop" style="min-width:150px">Stop &amp; save</button><button class="btn ghost" data-a="discard">Discard</button>':'<button class="btn primary" data-a="start" style="min-width:150px">▶ Start timer</button>')
+   +'</div><p class="muted small" style="margin:14px 0 0">Today <b style="color:var(--ink)">'+hm(td+runningSecs())+"</b> logged</p></section>";
+  h+='<section class="card"><h2>Add time manually</h2><div class="row" style="align-items:flex-end"><div style="width:150px"><label class="f" for="md">Date</label><input type="date" id="md" value="'+today()+'"></div><div class="grow"><label class="f" for="mp">Project</label><select id="mp">'+act.map(p=>'<option value="'+p.id+'">'+esc(p.name)+"</option>").join("")+'</select></div><div style="width:110px"><label class="f" for="mt">Time</label><input id="mt" placeholder="1:30" inputmode="text"></div></div><div class="row" style="margin-top:10px;align-items:flex-end"><div class="grow"><label class="f" for="mx">Description</label><input id="mx" maxlength="140" placeholder="Optional"></div><label class="chk" style="padding-bottom:10px"><input type="checkbox" id="mb" checked> Billable</label><button class="btn primary" data-a="add-manual">Add</button></div><div class="err" id="merr"></div><p class="muted small" style="margin:0">Accepts 1:30, 1.5, 90m or 1h30m.</p></section>';
+  const dates=[...new Set(S.entries.map(e=>e.date))].sort().reverse();
+  const shown=ui.showAll?dates:dates.slice(0,7);
+  h+='<section class="card"><h2>Recent entries</h2>';
+  if(!dates.length)h+='<p class="muted">Nothing logged yet. Start the timer or add time above.</p>';
+  shown.forEach(d=>{
+    const list=S.entries.filter(e=>e.date===d).sort((a,b)=>(b.created||0)-(a.created||0));
+    h+='<div class="day">'+nice(d)+"<span>"+hm(sum(list,e=>e.secs))+" total</span></div>"+list.map(entryRow).join("");
+  });
+  if(dates.length>7)h+='<div style="margin-top:12px"><button class="btn sm" data-a="show-all">'+(ui.showAll?"Show fewer days":"Show all "+dates.length+" days")+"</button></div>";
+  return h+"</section>";
+}
+function viewWeek(){
+  if(!S.projects.length)return emptyState();
+  const [a,b]=weekRange(),days=[];for(let i=0;i<7;i++)days.push(addDays(a,i));
+  const rows=S.projects.filter(p=>!p.archived||S.entries.some(e=>e.projectId===p.id&&e.date>=a&&e.date<=b));
+  const t=today(),total=secsBetween(a,b),bill=sum(S.entries.filter(e=>e.date>=a&&e.date<=b),entryAmt);
+  const pct=Math.min(100,total/3600/Math.max(1,S.settings.target)*100);
+  const lbl=pYmd(a).toLocaleDateString(undefined,{month:"short",day:"numeric"})+" – "+pYmd(b).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  let h='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row"><button class="btn" data-a="wk-prev" aria-label="Previous week">←</button><button class="btn" data-a="wk-next" aria-label="Next week">→</button><button class="btn" data-a="wk-this">This week</button></div><b style="font:600 18px var(--serif)">'+lbl+"</b></div>";
+  h+='<section class="card"><div class="scroll"><table><thead><tr><th>Project</th>'+days.map(d=>'<th class="'+(d===t?"today":"")+'">'+pYmd(d).toLocaleDateString(undefined,{weekday:"short"})+"<br>"+pYmd(d).getDate()+"</th>").join("")+"<th>Total</th></tr></thead><tbody>";
+  rows.forEach(p=>{
+    const rs=secsBetween(a,b,e=>e.projectId===p.id);
+    h+='<tr><td><span class="dot" style="background:'+p.color+'"></span> '+esc(p.name)+"</td>"+days.map(d=>{const s=secsBetween(d,d,e=>e.projectId===p.id);return '<td class="cell'+(s?"":" zero")+(d===t?" today":"")+'" data-a="cell" data-d="'+d+'" data-p="'+p.id+'" title="Add time">'+(s?hm(s):"·")+"</td>"}).join("")+"<td><b>"+(rs?hm(rs):"–")+"</b></td></tr>";
+  });
+  h+="</tbody><tfoot><tr><td>Total</td>"+days.map(d=>{const s=secsBetween(d,d);return "<td>"+(s?hm(s):"–")+"</td>"}).join("")+"<td>"+hm(total)+"</td></tr></tfoot></table></div><p class=\"muted small\" style=\"margin:10px 0 0\">Click any cell to add time to that project and day.</p></section>";
+  h+='<section class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><div><div class="eyebrow">Weekly target</div><b style="font:600 22px var(--serif)">'+hm(total)+'</b> <span class="muted">of '+S.settings.target+'h</span></div><div style="text-align:right"><div class="eyebrow">Billable this week</div><b style="font:600 22px var(--serif)">'+money(bill)+'</b></div></div><div class="bar"><i style="width:'+pct+'%"></i></div></section>';
+  return h;
+}
+function projStats(p){const es=S.entries.filter(e=>e.projectId===p.id);return{secs:sum(es,e=>e.secs),amt:sum(es,entryAmt)}}
+function viewProjects(){
+  let h='<section class="card"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2 style="margin:0">Projects</h2><button class="btn primary" data-a="new-project">+ New project</button></div>';
+  if(!S.projects.length)h+='<p class="muted">No projects yet.</p>';
+  S.projects.slice().sort((x,y)=>(x.archived?1:0)-(y.archived?1:0)).forEach(p=>{
+    const st=projStats(p),bud=p.budget>0?st.secs/3600/p.budget*100:null;
+    h+='<div class="proj'+(p.archived?" arch":"")+'"><span class="dot" style="background:'+p.color+';width:14px;height:14px"></span><div class="grow"><b>'+esc(p.name)+"</b>"+(p.archived?'<span class="tag">archived</span>':"")+'<div class="muted small">'+(esc(p.client)||"No client")+" · "+money(p.rate||0)+"/hr · "+hm(st.secs)+" logged · "+money(st.amt)+" billable</div>"
+     +(bud!==null?'<div class="bar'+(bud>100?" over":"")+'" style="margin-top:8px;max-width:320px"><i style="width:'+Math.min(100,bud)+'%"></i></div><div class="muted small">'+Math.round(bud)+"% of "+p.budget+"h budget"+(bud>100?" — over budget":"")+"</div>":"")
+     +'</div><button class="btn sm" data-a="edit-project" data-id="'+p.id+'">Edit</button><button class="btn sm" data-a="arch-project" data-id="'+p.id+'">'+(p.archived?"Restore":"Archive")+"</button></div>";
+  });
+  h+="</section>";
+  const s=S.settings;
+  h+='<section class="card"><h2>Settings</h2><div class="row"><div style="width:110px"><label class="f" for="s-cur">Currency</label><input id="s-cur" maxlength="4" value="'+esc(s.currency)+'"></div><div style="width:150px"><label class="f" for="s-target">Weekly target (h)</label><input id="s-target" type="number" min="1" max="168" value="'+s.target+'"></div><div style="width:170px"><label class="f" for="s-ws">Week starts on</label><select id="s-ws"><option value="1"'+(s.weekStart==1?" selected":"")+'>Monday</option><option value="0"'+(s.weekStart==0?" selected":"")+">Sunday</option></select></div></div></section>";
+  h+='<section class="card"><h2>Your data</h2><p class="muted small" style="margin-top:0">Everything is stored in this browser. Export a backup now and then, especially before clearing your browser data or switching devices.</p><div class="row"><button class="btn" data-a="csv-all">Export all as CSV</button><button class="btn" data-a="backup">Backup (JSON)</button><button class="btn" data-a="import">Restore backup…</button><input type="file" id="file" accept=".json,application/json" style="display:none"><button class="btn" data-a="sample">Load sample data</button><button class="btn danger" data-a="clear">Clear everything</button></div></section>';
+  return h;
+}
+function rangeBounds(){
+  const t=today(),d=pYmd(t),ws=wkStart(t);
+  switch(ui.range){
+    case "week":return[ws,addDays(ws,6)];
+    case "lastweek":return[addDays(ws,-7),addDays(ws,-1)];
+    case "month":return[ymd(new Date(d.getFullYear(),d.getMonth(),1)),ymd(new Date(d.getFullYear(),d.getMonth()+1,0))];
+    case "lastmonth":return[ymd(new Date(d.getFullYear(),d.getMonth()-1,1)),ymd(new Date(d.getFullYear(),d.getMonth(),0))];
+    case "30":return[addDays(t,-29),t];
+    case "all":{const ds=S.entries.map(e=>e.date).sort();return[ds[0]||t,ds[ds.length-1]||t]}
+    default:{const f=ui.from||t,u=ui.to||t;return f<=u?[f,u]:[u,f]}
+  }
+}
+function viewReports(){
+  if(!S.projects.length)return emptyState();
+  const [a,b]=rangeBounds(),list=S.entries.filter(e=>e.date>=a&&e.date<=b);
+  const tot=sum(list,e=>e.secs),bs=sum(list.filter(e=>e.billable),e=>e.secs),amt=sum(list,entryAmt),days=new Set(list.map(e=>e.date)).size;
+  const rs={week:"This week",lastweek:"Last week",month:"This month",lastmonth:"Last month","30":"Last 30 days",all:"All time",custom:"Custom"};
+  let h='<div class="chips">'+Object.keys(rs).map(k=>'<button data-a="range" data-v="'+k+'" aria-pressed="'+(ui.range===k)+'">'+rs[k]+"</button>").join("")+"</div>";
+  if(ui.range==="custom")h+='<div class="row" style="margin-bottom:14px"><div><label class="f" for="r-from">From</label><input type="date" id="r-from" value="'+a+'"></div><div><label class="f" for="r-to">To</label><input type="date" id="r-to" value="'+b+'"></div></div>';
+  h+='<div class="tiles"><div class="tile"><div class="eyebrow">Total time</div><div class="v">'+hm(tot)+'</div></div><div class="tile"><div class="eyebrow">Billable time</div><div class="v">'+hm(bs)+'</div></div><div class="tile"><div class="eyebrow">Earnings</div><div class="v">'+money(amt)+'</div></div><div class="tile"><div class="eyebrow">Avg / worked day</div><div class="v">'+(days?hm(tot/days):"0:00")+"</div></div></div>";
+  // chart
+  const span=(pYmd(b)-pYmd(a))/864e5+1,weekly=span>35,buckets=new Map();
+  if(span<=400){for(let i=0;i<span;i++){const d=addDays(a,i),k=weekly?wkStart(d):d;if(!buckets.has(k))buckets.set(k,0)}
+    list.forEach(e=>{const k=weekly?wkStart(e.date):e.date;buckets.set(k,(buckets.get(k)||0)+e.secs)});
+    const vals=[...buckets.values()],mx=Math.max(1,...vals),keys=[...buckets.keys()];
+    h+='<section class="card"><h2>'+(weekly?"Hours per week":"Hours per day")+'</h2><div class="chart" role="img" aria-label="Bar chart of hours">'+keys.map((k,i)=>'<div class="'+(vals[i]?"":"z")+'" style="height:'+Math.max(2,vals[i]/mx*100)+'%" title="'+nice(k)+": "+hm(vals[i])+'"></div>').join("")+'</div><div class="chartx"><span>'+pYmd(keys[0]).toLocaleDateString(undefined,{month:"short",day:"numeric"})+"</span><span>peak "+hm(mx)+"</span><span>"+pYmd(keys[keys.length-1]).toLocaleDateString(undefined,{month:"short",day:"numeric"})+"</span></div></section>";
+  }
+  // by project
+  const by=S.projects.map(p=>{const es=list.filter(e=>e.projectId===p.id);return{p,secs:sum(es,e=>e.secs),bs:sum(es.filter(e=>e.billable),e=>e.secs),amt:sum(es,entryAmt)}}).filter(r=>r.secs>0).sort((x,y)=>y.secs-x.secs);
+  h+='<section class="card"><h2>By project</h2>';
+  if(!by.length)h+='<p class="muted">No time logged in this range.</p>';
+  else h+='<div class="scroll"><table><thead><tr><th>Project</th><th>Time</th><th>Billable</th><th>Earned</th><th style="width:30%"></th></tr></thead><tbody>'+by.map(r=>'<tr><td><span class="dot" style="background:'+r.p.color+'"></span> '+esc(r.p.name)+"</td><td>"+hm(r.secs)+"</td><td>"+hm(r.bs)+"</td><td>"+money(r.amt)+'</td><td><div class="bar"><i style="width:'+r.secs/tot*100+"%;background:"+r.p.color+'"></i></div></td></tr>').join("")+"</tbody></table></div>";
+  h+='<div style="margin-top:12px"><button class="btn sm" data-a="csv-range">Export this range as CSV</button></div></section>';
+  // invoice
+  const cand=by.filter(r=>r.bs>0).map(r=>r.p);
+  if(cand.length){
+    if(!cand.find(p=>p.id===ui.inv))ui.inv=cand[0].id;
+    const p=proj(ui.inv),items=list.filter(e=>e.projectId===p.id&&e.billable).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
+    const lines=items.map(e=>({e,amt:r2(e.secs/3600*(p.rate||0))})),total=sum(lines,l=>l.amt);
+    h+='<section class="card"><h2>Invoice builder</h2><div class="row" style="margin-bottom:12px"><div class="grow"><label class="f" for="inv-p">Project</label><select id="inv-p">'+cand.map(c=>'<option value="'+c.id+'"'+(c.id===ui.inv?" selected":"")+">"+esc(c.name)+"</option>").join("")+'</select></div><div style="width:150px"><label class="f" for="inv-n">Invoice no.</label><input id="inv-n" value="'+esc(ui.invNo)+'" placeholder="Optional"></div></div><div class="scroll"><table><thead><tr><th>Date</th><th style="text-align:left">Description</th><th>Hours</th><th>Amount</th></tr></thead><tbody>'
+     +lines.map(l=>"<tr><td>"+l.e.date+'</td><td style="text-align:left;white-space:normal">'+(esc(l.e.desc)||"—")+"</td><td>"+dec(l.e.secs)+"</td><td>"+money(l.amt)+"</td></tr>").join("")
+     +"</tbody><tfoot><tr><td colspan=\"2\">"+esc(p.client||p.name)+" · "+money(p.rate||0)+'/hr</td><td>'+dec(sum(items,e=>e.secs))+"</td><td>"+money(total)+'</td></tr></tfoot></table></div><div class="row" style="margin-top:14px"><button class="btn primary" data-a="inv-copy">Copy invoice text</button><button class="btn" data-a="inv-csv">Download CSV</button></div></section>';
+  }
+  return h;
+}
+function render(){
+  renderHeader();
+  const v={track:viewTrack,week:viewWeek,projects:viewProjects,reports:viewReports}[ui.tab]();
+  const warn=storageOK?"":'<div class="warn">This view cannot save to your browser, so changes will be lost when you close it. Use <b>Backup (JSON)</b> under Projects to keep your data.</div>';
+  $("#main").innerHTML=warn+v;
+  document.title=(S.timer?"⏱ "+clock(runningSecs())+" · ":"")+"Timesheet";
+}
+
+/* ---------- forms ---------- */
+function entryModal(o){
+  const e=o.id?S.entries.find(x=>x.id===o.id):null;
+  const act=S.projects.filter(p=>!p.archived||(e&&p.id===e.projectId));
+  const pid=e?e.projectId:(o.projectId||(act[0]&&act[0].id));
+  openModal(e?"Edit entry":"Add time",'<div class="field"><label class="f" for="e-d">Date</label><input type="date" id="e-d" value="'+(e?e.date:(o.date||today()))+'"></div><div class="field"><label class="f" for="e-p">Project</label><select id="e-p">'+act.map(p=>'<option value="'+p.id+'"'+(p.id===pid?" selected":"")+">"+esc(p.name)+"</option>").join("")+'</select></div><div class="field"><label class="f" for="e-t">Time (1:30, 1.5, 90m)</label><input id="e-t" value="'+(e?hm(e.secs):"")+'"></div><div class="field"><label class="f" for="e-x">Description</label><input id="e-x" maxlength="140" value="'+esc(e?e.desc:"")+'"></div><label class="chk"><input type="checkbox" id="e-b" '+((e?e.billable:true)?"checked":"")+'> Billable</label><div class="err" id="e-err"></div><div class="foot"><button class="btn" data-a="close">Cancel</button><button class="btn primary" data-a="save-entry" data-id="'+(e?e.id:"")+'">Save</button></div>');
+  if(!e&&o.projectId)setTimeout(()=>{const t=$("#e-t");if(t)t.focus()},30);
+}
+function projectModal(id){
+  const p=id?proj(id):null,col=p?p.color:COLORS[S.projects.length%COLORS.length];
+  openModal(p?"Edit project":"New project",'<div class="field"><label class="f" for="p-n">Project name</label><input id="p-n" maxlength="60" value="'+esc(p?p.name:"")+'"></div><div class="field"><label class="f" for="p-c">Client (optional)</label><input id="p-c" maxlength="60" value="'+esc(p?p.client:"")+'"></div><div class="row"><div class="field grow"><label class="f" for="p-r">Hourly rate ('+esc(S.settings.currency)+')</label><input id="p-r" type="number" min="0" step="0.01" value="'+(p?p.rate:"")+'"></div><div class="field grow"><label class="f" for="p-b">Budget hours (optional)</label><input id="p-b" type="number" min="0" step="0.5" value="'+(p&&p.budget?p.budget:"")+'"></div></div><div class="field"><div class="f" style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Color</div><div class="swatches">'+COLORS.map((c,i)=>'<input type="radio" name="pc" id="pc'+i+'" value="'+c+'"'+(c===col?" checked":"")+'><label for="pc'+i+'" style="background:'+c+'" aria-label="Color '+(i+1)+'"></label>').join("")+'</div></div><div class="err" id="p-err"></div><div class="foot">'+(p?'<button class="btn danger" data-a="del-project" data-id="'+p.id+'" style="margin-right:auto">Delete</button>':"")+'<button class="btn" data-a="close">Cancel</button><button class="btn primary" data-a="save-project" data-id="'+(p?p.id:"")+'">Save</button></div>');
+}
+function invoiceText(){
+  const [a,b]=rangeBounds(),p=proj(ui.inv);if(!p)return"";
+  const items=S.entries.filter(e=>e.projectId===p.id&&e.billable&&e.date>=a&&e.date<=b).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
+  const lines=items.map(e=>({e,amt:r2(e.secs/3600*(p.rate||0))})),total=sum(lines,l=>l.amt);
+  return "INVOICE"+(ui.invNo?" #"+ui.invNo:"")+"\nProject: "+p.name+(p.client?"\nClient: "+p.client:"")+"\nPeriod: "+a+" to "+b+"\n\n"+lines.map(l=>l.e.date+"  "+(l.e.desc||"Work")+"  "+dec(l.e.secs)+"h  "+money(l.amt)).join("\n")+"\n\nTotal hours: "+dec(sum(items,e=>e.secs))+"\nRate: "+money(p.rate||0)+"/hr\nTOTAL DUE: "+money(total);
+}
+
+/* ---------- sample data ---------- */
+function loadSample(){
+  const ps=[{id:uid(),name:"Brand website",client:"Fernwood Studio",rate:85,budget:60,color:COLORS[0]},{id:uid(),name:"Monthly retainer",client:"Alder & Co",rate:70,budget:0,color:COLORS[2]},{id:uid(),name:"Workshop prep",client:"",rate:0,budget:0,color:COLORS[3]}];
+  const descs=[["Homepage layout","Responsive fixes","Client feedback round","Copy edits"],["Weekly reporting","Support requests","Analytics review"],["Slides","Research"]];
+  const es=[];let seed=7;const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
+  for(let i=0;i<21;i++){const d=addDays(today(),-i),dow=pYmd(d).getDay();if(dow===0||dow===6)continue;
+    ps.forEach((p,pi)=>{if(rnd()<(pi===0?.85:pi===1?.5:.25)){es.push({id:uid(),projectId:p.id,date:d,secs:Math.round((.75+rnd()*3)*4)*900,desc:descs[pi][Math.floor(rnd()*descs[pi].length)],billable:p.rate>0,created:Date.now()-i*1000+pi})}})}
+  S.projects=S.projects.concat(ps);S.entries=S.entries.concat(es);save();
+}
+
+/* ---------- actions ---------- */
+function startTimer(){
+  const pid=$("#tp").value;if(!pid)return;
+  S.timer={projectId:pid,desc:$("#td").value.trim(),billable:$("#tb").checked,start:Date.now()};save();render();
+}
+function stopTimer(){
+  const t=S.timer;if(!t)return;
+  const secs=Math.round((Date.now()-t.start)/1000);
+  S.timer=null;
+  if(secs>=1){S.entries.push({id:uid(),projectId:t.projectId,date:ymd(new Date(t.start)),secs:secs,desc:t.desc,billable:t.billable,created:Date.now()});toast("Saved "+hm(secs)+" to "+((proj(t.projectId)||{}).name||"project"))}
+  save();render();
+}
+function readEntryForm(){
+  const secs=parseDur($("#e-t").value),d=$("#e-d").value;
+  if(!d){$("#e-err").textContent="Pick a date.";return null}
+  if(!secs||secs<=0){$("#e-err").textContent="Enter a time like 1:30, 1.5 or 90m.";return null}
+  if(secs>24*3600){$("#e-err").textContent="An entry can't be longer than 24 hours.";return null}
+  return{projectId:$("#e-p").value,date:d,secs:secs,desc:$("#e-x").value.trim(),billable:$("#e-b").checked};
+}
+document.addEventListener("click",async ev=>{
+  const el=ev.target.closest("[data-a]");
+  if(!el){if(ev.target.id==="modal")closeModal();return}
+  const a=el.dataset.a,id=el.dataset.id;
+  switch(a){
+    case "tab":ui.tab=el.dataset.v;render();break;
+    case "close":closeModal();break;
+    case "start":startTimer();break;
+    case "stop":stopTimer();break;
+    case "discard":confirmModal("Discard timer?","The running time (" + clock(runningSecs()) + ") will not be saved.","Discard",()=>{S.timer=null;save();render()});break;
+    case "add-manual":{
+      const secs=parseDur($("#mt").value),err=$("#merr");
+      if(!$("#md").value){err.textContent="Pick a date.";break}
+      if(!secs||secs<=0||secs>86400){err.textContent="Enter a time like 1:30, 1.5 or 90m.";break}
+      S.entries.push({id:uid(),projectId:$("#mp").value,date:$("#md").value,secs:secs,desc:$("#mx").value.trim(),billable:$("#mb").checked,created:Date.now()});
+      save();render();toast("Added "+hm(secs));break}
+    case "edit-entry":entryModal({id:id});break;
+    case "del-entry":{
+      const i=S.entries.findIndex(e=>e.id===id);if(i<0)break;
+      const gone=S.entries.splice(i,1)[0];save();render();
+      toast("Entry deleted","Undo",()=>{S.entries.push(gone);save();render()});break}
+    case "cell":entryModal({date:el.dataset.d,projectId:el.dataset.p});break;
+    case "save-entry":{
+      const v=readEntryForm();if(!v)break;
+      if(id){Object.assign(S.entries.find(e=>e.id===id),v)}else S.entries.push(Object.assign({id:uid(),created:Date.now()},v));
+      save();closeModal();render();break}
+    case "show-all":ui.showAll=!ui.showAll;render();break;
+    case "wk-prev":ui.wk=addDays(weekRange()[0],-7);render();break;
+    case "wk-next":ui.wk=addDays(weekRange()[0],7);render();break;
+    case "wk-this":ui.wk=null;render();break;
+    case "new-project":projectModal();break;
+    case "edit-project":projectModal(id);break;
+    case "arch-project":{const p=proj(id);p.archived=!p.archived;save();render();break}
+    case "save-project":{
+      const n=$("#p-n").value.trim(),r=parseFloat($("#p-r").value);
+      if(!n){$("#p-err").textContent="Give the project a name.";break}
+      if(isNaN(r)||r<0){$("#p-err").textContent="Enter an hourly rate (0 if unpaid).";break}
+      const c=document.querySelector("input[name=pc]:checked"),vals={name:n,client:$("#p-c").value.trim(),rate:r,budget:parseFloat($("#p-b").value)||0,color:c?c.value:COLORS[0]};
+      if(id)Object.assign(proj(id),vals);else S.projects.push(Object.assign({id:uid(),archived:false},vals));
+      save();closeModal();render();break}
+    case "del-project":{
+      const n=S.entries.filter(e=>e.projectId===id).length;
+      if(S.timer&&S.timer.projectId===id){$("#p-err").textContent="Stop the running timer first.";break}
+      confirmModal("Delete project?","This also deletes its "+n+" logged "+(n===1?"entry":"entries")+". Archiving keeps your history instead.","Delete",()=>{S.projects=S.projects.filter(p=>p.id!==id);S.entries=S.entries.filter(e=>e.projectId!==id);save();render()});break}
+    case "range":ui.range=el.dataset.v;render();break;
+    case "inv-copy":{const t=invoiceText();if(!(await copyText(t,"Invoice copied")))openModal("Invoice text",'<pre class="out">'+esc(t)+'</pre><div class="foot"><button class="btn" data-a="close">Close</button></div>',true);break}
+    case "inv-csv":{const [x,y]=rangeBounds(),p=proj(ui.inv);saveFile("invoice-"+p.name.replace(/\W+/g,"-").toLowerCase()+"-"+x+".csv",csvFor(S.entries.filter(e=>e.projectId===p.id&&e.billable&&e.date>=x&&e.date<=y)));break}
+    case "csv-range":{const [x,y]=rangeBounds();saveFile("timesheet-"+x+"-to-"+y+".csv",csvFor(S.entries.filter(e=>e.date>=x&&e.date<=y)));break}
+    case "csv-all":saveFile("timesheet-all.csv",csvFor(S.entries));break;
+    case "backup":saveFile("timesheet-backup-"+today()+".json",JSON.stringify(S,null,2));break;
+    case "import":$("#file").click();break;
+    case "copy-raw":{const t=$("#raw");if(t){t.select();if(!(await copyText(t.value,"Copied")))toast("Select the text and copy it")}break}
+    case "sample":loadSample();ui.tab="track";render();toast("Sample data added");break;
+    case "clear":confirmModal("Clear everything?","This deletes all projects, entries and settings from this browser. Consider a backup first.","Delete all",()=>{S=defaults();save();render()});break;
+  }
+});
+document.addEventListener("change",ev=>{
+  const t=ev.target;
+  if(t.id==="file"&&t.files[0]){
+    const f=t.files[0],r=new FileReader();
+    r.onload=()=>{try{const o=JSON.parse(r.result);if(!Array.isArray(o.projects)||!Array.isArray(o.entries))throw 0;
+      confirmModal("Restore backup?","This replaces everything currently in this browser with "+o.projects.length+" projects and "+o.entries.length+" entries.","Restore",()=>{const d=defaults();S={projects:o.projects,entries:o.entries,timer:null,settings:Object.assign(d.settings,o.settings||{})};save();render();toast("Backup restored")})}
+      catch(e){toast("That file isn't a Timesheet backup")}};
+    r.readAsText(f);return}
+  if(t.id==="s-cur"){S.settings.currency=t.value.trim()||"$";save();render()}
+  else if(t.id==="s-target"){S.settings.target=Math.max(1,Math.min(168,parseFloat(t.value)||40));save();render()}
+  else if(t.id==="s-ws"){S.settings.weekStart=+t.value;save();render()}
+  else if(t.id==="r-from"||t.id==="r-to"){ui.from=$("#r-from").value;ui.to=$("#r-to").value;render()}
+  else if(t.id==="inv-p"){ui.inv=t.value;render()}
+});
+document.addEventListener("input",ev=>{
+  const t=ev.target;
+  if(t.id==="td"&&S.timer){S.timer.desc=t.value;save()}
+  if(t.id==="inv-n")ui.invNo=t.value;
+});
+document.addEventListener("keydown",ev=>{
+  if(ev.key==="Escape")closeModal();
+  if(ev.key==="Enter"&&ev.target.tagName==="INPUT"&&ev.target.type!=="checkbox"){
+    const m=$("#modal.open [data-a=save-entry],#modal.open [data-a=save-project]");
+    if(m)m.click();else if(ev.target.id==="mt"||ev.target.id==="mx"){const b=document.querySelector("[data-a=add-manual]");if(b)b.click()}
+    else if(ev.target.id==="td"){const b=document.querySelector("[data-a=start]");if(b)b.click()}
+  }
+});
+setInterval(()=>{
+  if(!S.timer)return;
+  const c=$("#clock");if(c)c.textContent=clock(runningSecs());
+  document.title="⏱ "+clock(runningSecs())+" · Timesheet";
+  if(Math.floor(runningSecs())%30===0)renderHeader();
+},1000);
+render();
+})();
+</script>
+</body>
+</html>
