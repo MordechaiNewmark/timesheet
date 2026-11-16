@@ -138,7 +138,23 @@ function load(){
   return defaults();
 }
 let S=load();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false}}
+let synced=false,pushT=null;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false}schedulePush()}
+function schedulePush(){if(!synced)return;clearTimeout(pushT);pushT=setTimeout(push,400)}
+function push(){
+  fetch("/api/data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(S)}).catch(()=>{});
+}
+async function hydrate(){
+  try{
+    const r=await fetch("/api/data",{cache:"no-store"});
+    if(!r.ok)throw 0;
+    const j=await r.json(),d=defaults();
+    if(j.state){S={projects:j.state.projects||[],entries:j.state.entries||[],timer:j.state.timer||null,settings:Object.assign(d.settings,j.state.settings||{})};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+    synced=true;
+    if(!j.state&&(S.projects.length||S.entries.length))push();
+    render();
+  }catch(e){}
+}
 try{localStorage.setItem(KEY+".t","1");localStorage.removeItem(KEY+".t")}catch(e){storageOK=false}
 
 const ui={tab:"track",wk:null,range:"week",from:"",to:"",inv:"",invNo:"",showAll:false};
@@ -484,6 +500,7 @@ setInterval(()=>{
   if(Math.floor(runningSecs())%30===0)renderHeader();
 },1000);
 render();
+hydrate();
 })();
 </script>
 </body>
