@@ -124,15 +124,21 @@ pre.out{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);b
 .keybox{font:13px ui-monospace,Menlo,monospace;word-break:break-all;background:var(--bg);border:1px dashed var(--accent);border-radius:10px;padding:10px;margin:10px 0}
 .foot-links{text-align:center;margin-top:28px;font-size:13px;color:var(--muted)}.foot-links a{color:var(--muted)}
 @media print{body>.wrap,#toast{display:none!important}body{background:#fff}#modal{position:static;display:block!important;background:none;padding:0}.sheet{border:0;max-width:none;padding:0;background:none}.sheet h3,.noprint{display:none!important}}
+.stick{position:sticky;top:0;z-index:10;background:var(--bg);margin:-20px -16px 0;padding:14px 16px 1px;border-bottom:1px solid transparent}
+.stick nav.tabs{margin-bottom:12px}
+.stick header.top{margin-bottom:12px}
+@media print{.stick{position:static}}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div class="stick">
   <header class="top">
     <div class="brand"><i></i>Timesheet</div>
     <div class="row" id="hdr"></div>
   </header>
   <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
   <main id="main"></main>
 </div>
 <div id="modal"></div>
