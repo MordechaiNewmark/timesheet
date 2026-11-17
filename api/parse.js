@@ -1,4 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { getUser, hit, requireJson } from "./_lib.js";
 
 export const config = { maxDuration: 60 };
 
@@ -48,7 +49,21 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
   if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) return res.status(503).json({ error: "CLAUDE_CODE_OAUTH_TOKEN is not configured" });
-  const b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+  if (!requireJson(req, res)) return;
+  let user;
+  try {
+    user = await getUser(req);
+    if (!user) return res.status(401).json({ error: "Not signed in" });
+    const day = new Date().toISOString().slice(0, 10);
+    const limit = Number(process.env.AI_DAILY_LIMIT) || 40;
+    if (!(await hit("parse:" + user.id + ":" + day, limit, 864e5))) {
+      return res.status(429).json({ error: "Daily AI limit reached (" + limit + "). Try again tomorrow." });
+    }
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "auth check failed" });
+  }
+  const b =typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
   const text = String(b.text || "").slice(0, 4000).trim();
   if (!text) return res.status(400).json({ error: "empty text" });
   const today = /^\d{4}-\d{2}-\d{2}$/.test(b.today) ? b.today : new Date().toISOString().slice(0, 10);

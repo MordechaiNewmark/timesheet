@@ -128,7 +128,9 @@ pre.out{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);b
 <script>
 (function(){
 "use strict";
-const KEY="timesheet.v1";
+const LEGACY="timesheet.v1";
+let KEY=LEGACY;
+let user=null,authMode="login",authErr="",authInfo={needsCode:false};
 const COLORS=["#1f6f5c","#c2562f","#3b6fb6","#b9891c","#8a4fa0","#c04a77","#4c8a2f","#5b6b78"];
 let storageOK=true;
 function defaults(){return {projects:[],entries:[],timer:null,settings:{currency:"$",target:40,weekStart:1}}}
@@ -137,23 +139,60 @@ function load(){
   catch(e){storageOK=false}
   return defaults();
 }
-let S=load();
+let S=defaults();
 let synced=false,pushT=null;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false}schedulePush()}
 function schedulePush(){if(!synced)return;clearTimeout(pushT);pushT=setTimeout(push,400)}
 function push(){
-  fetch("/api/data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(S)}).catch(()=>{});
+  fetch("/api/data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(S)}).then(r=>{if(r.status===401)signedOut("Session expired. Please sign in again.")}).catch(()=>{});
+}
+function readLegacy(){
+  try{const r=localStorage.getItem(LEGACY);if(!r)return null;const o=JSON.parse(r),d=defaults();return {projects:o.projects||[],entries:o.entries||[],timer:o.timer||null,settings:Object.assign(d.settings,o.settings||{})}}catch(e){return null}
 }
 async function hydrate(){
   try{
     const r=await fetch("/api/data",{cache:"no-store"});
+    if(r.status===401){signedOut("Session expired. Please sign in again.");return}
     if(!r.ok)throw 0;
     const j=await r.json(),d=defaults();
     if(j.state){S={projects:j.state.projects||[],entries:j.state.entries||[],timer:j.state.timer||null,settings:Object.assign(d.settings,j.state.settings||{})};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+    else if(!S.projects.length&&!S.entries.length){const l=readLegacy();if(l)S=l}
     synced=true;
     if(!j.state&&(S.projects.length||S.entries.length))push();
     render();
   }catch(e){}
+}
+async function enter(u){
+  user=u;KEY=LEGACY+"."+u.id;synced=false;authErr="";
+  S=load();
+  render();
+  hydrate();
+}
+function signedOut(msg){
+  clearTimeout(pushT);user=null;S=defaults();synced=false;KEY=LEGACY;authErr=msg||"";closeModal();render();
+}
+async function boot(){
+  try{
+    const r=await fetch("/api/auth",{cache:"no-store"});
+    const j=await r.json().catch(()=>({}));
+    authInfo.needsCode=!!j.needsCode;
+    if(r.ok&&j.user){enter(j.user);return}
+    if(r.status!==401)authErr=j.error||"Server error";
+  }catch(e){authErr="Cannot reach the server."}
+  render();
+}
+function renderAuth(){
+  $("#hdr").innerHTML="";$("#tabs").innerHTML="";
+  const reg=authMode==="register";
+  $("#main").innerHTML='<section class="card" id="authform" style="max-width:420px;margin:6vh auto 0"><div class="eyebrow">'+(reg?"Create account":"Welcome back")+'</div><h2 style="font-size:24px;margin:4px 0 14px">'+(reg?"Start tracking your time":"Sign in to Timesheet")+'</h2>'
+   +'<div class="field"><label class="f" for="a-e">Email</label><input id="a-e" type="email" autocomplete="email" maxlength="200"></div>'
+   +'<div class="field"><label class="f" for="a-p">Password'+(reg?" (8+ characters)":"")+'</label><input id="a-p" type="password" autocomplete="'+(reg?"new-password":"current-password")+'" maxlength="200"></div>'
+   +(reg&&authInfo.needsCode?'<div class="field"><label class="f" for="a-c">Invite code</label><input id="a-c" autocomplete="off" maxlength="100"></div>':"")
+   +'<div class="err" id="a-err">'+esc(authErr)+'</div>'
+   +'<button class="btn primary" data-a="auth-submit" style="width:100%">'+(reg?"Create account":"Sign in")+'</button>'
+   +'<p class="muted small" style="text-align:center;margin:14px 0 0">'+(reg?"Already have an account?":"New here?")+' <button class="btn ghost sm" data-a="auth-toggle">'+(reg?"Sign in":"Create an account")+'</button></p></section>';
+  document.title="Sign in · Timesheet";
+  const e=$("#a-e");if(e)e.focus();
 }
 try{localStorage.setItem(KEY+".t","1");localStorage.removeItem(KEY+".t")}catch(e){storageOK=false}
 
@@ -241,7 +280,7 @@ function runningSecs(){return S.timer?(Date.now()-S.timer.start)/1000:0}
 function renderHeader(){
   const w=wkStart(today());
   const secs=secsBetween(w,addDays(w,6))+(S.timer&&S.timer.start>=pYmd(w).getTime()?runningSecs():0);
-  $("#hdr").innerHTML='<span class="chip">This week <b>'+hm(secs)+"</b> / "+S.settings.target+"h</span>";
+  $("#hdr").innerHTML='<span class="chip">This week <b>'+hm(secs)+"</b> / "+S.settings.target+'h</span><span class="chip">'+esc(user.email)+'</span><button class="btn sm" data-a="logout">Sign out</button>';
   const names={track:"Track",week:"Week",projects:"Projects",reports:"Reports"};
   $("#tabs").innerHTML=Object.keys(names).map(k=>'<button role="tab" data-a="tab" data-v="'+k+'" aria-selected="'+(ui.tab===k)+'">'+names[k]+"</button>").join("");
 }
@@ -356,6 +395,7 @@ function viewReports(){
   return h;
 }
 function render(){
+  if(!user){renderAuth();return}
   renderHeader();
   const v={track:viewTrack,week:viewWeek,projects:viewProjects,reports:viewReports}[ui.tab]();
   const warn=storageOK?"":'<div class="warn">This view cannot save to your browser, so changes will be lost when you close it. Use <b>Backup (JSON)</b> under Projects to keep your data.</div>';
@@ -412,6 +452,7 @@ async function aiParse(){
   try{
     const r=await fetch("/api/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text,today:today(),projects:S.projects.filter(p=>!p.archived).map(p=>p.name)})});
     const j=await r.json().catch(()=>({}));
+    if(r.status===401){signedOut("Session expired. Please sign in again.");return}
     if(!r.ok)throw new Error(j.error||"Request failed");
     if(!j.entries.length){toast("No time entries found in that text");return}
     pendingAI=j;
@@ -445,6 +486,19 @@ document.addEventListener("click",async ev=>{
   if(!el){if(ev.target.id==="modal")closeModal();return}
   const a=el.dataset.a,id=el.dataset.id;
   switch(a){
+    case "auth-toggle":authMode=authMode==="login"?"register":"login";authErr="";renderAuth();break;
+    case "auth-submit":{
+      const err=$("#a-err");err.textContent="";el.disabled=true;
+      try{
+        const r=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:authMode,email:$("#a-e").value,password:$("#a-p").value,code:$("#a-c")?$("#a-c").value:""})});
+        const j=await r.json().catch(()=>({}));
+        if(!r.ok){err.textContent=j.error||"Something went wrong.";el.disabled=false;return}
+        enter(j.user);
+      }catch(e){err.textContent="Cannot reach the server.";el.disabled=false}
+      break}
+    case "logout":{
+      try{await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"logout"})})}catch(e){}
+      authMode="login";signedOut("");break}
     case "tab":ui.tab=el.dataset.v;render();break;
     case "close":closeModal();break;
     case "start":startTimer();break;
@@ -519,6 +573,7 @@ document.addEventListener("input",ev=>{
   if(t.id==="ai-t")ui.aiText=t.value;
 });
 document.addEventListener("keydown",ev=>{
+  if(ev.key==="Enter"&&ev.target.closest&&ev.target.closest("#authform")){ev.preventDefault();const ab=document.querySelector("[data-a=auth-submit]");if(ab)ab.click();return}
   if(ev.key==="Escape")closeModal();
   if(ev.key==="Enter"&&ev.target.tagName==="INPUT"&&ev.target.type!=="checkbox"){
     const m=$("#modal.open [data-a=save-entry],#modal.open [data-a=save-project]");
@@ -532,8 +587,7 @@ setInterval(()=>{
   document.title="⏱ "+clock(runningSecs())+" · Timesheet";
   if(Math.floor(runningSecs())%30===0)renderHeader();
 },1000);
-render();
-hydrate();
+boot();
 })();
 </script>
 </body>
