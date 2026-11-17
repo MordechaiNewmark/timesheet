@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Project hours</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f1ea;--card:#fffdf8;--ink:#1d2420;--muted:#6b726c;--line:#e3ded2;--accent:#1f6f5c;--warn:#b9791c;--danger:#b3402e}
+@media (prefers-color-scheme:dark){:root{--bg:#111613;--card:#192019;--ink:#e8ebe6;--muted:#93a099;--line:#28322d;--accent:#4fb99b;--warn:#e0a84e;--danger:#e0705c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "DM Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px}
+h1{font:600 28px "Fraunces",Georgia,serif;margin:4px 0 2px}.muted{color:var(--muted)}.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.tile .v{font:600 26px "Fraunces",Georgia,serif;margin-top:4px}
+@media(max-width:560px){.tiles{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%}th,td{padding:9px 6px;text-align:right;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}th{font-size:12px;color:var(--muted)}td.d{text-align:left;white-space:normal}
+.st{font-size:11px;font-weight:700;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted)}.st.paid{color:var(--accent);border-color:var(--accent)}.st.sent{color:var(--warn);border-color:var(--warn)}
+a.btn{display:inline-block;background:var(--accent);color:#fff;border-radius:10px;padding:9px 14px;font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p class="muted">Loading…</p></div>
+<script>
+(function(){
+var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+var hm=function(s){var m=Math.round(s/60);return Math.floor(m/60)+":"+String(m%60).padStart(2,"0")};
+var t=new URLSearchParams(location.search).get("t")||"";
+fetch("/api/portal?t="+encodeURIComponent(t),{cache:"no-store"}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j}})}).then(function(x){
+  var app=document.getElementById("app");
+  if(!x.ok){app.innerHTML='<h1>Link unavailable</h1><p class="muted">'+esc(x.j.error||"This link is not valid.")+'</p>';return}
+  var j=x.j,m=function(n){return j.currency+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})};
+  document.title=j.project.name+" · hours";
+  var h='<div class="eyebrow">'+esc(j.business||"Time report")+'</div><h1>'+esc(j.project.name)+'</h1><div class="muted">'+esc(j.project.client)+'</div>';
+  h+='<div class="card tiles"><div class="tile"><div class="eyebrow">Total time</div><div class="v">'+hm(j.totals.secs)+'</div></div><div class="tile"><div class="eyebrow">Billable</div><div class="v">'+hm(j.totals.billableSecs)+'</div></div>'+(j.showMoney?'<div class="tile"><div class="eyebrow">Amount</div><div class="v">'+m(j.totals.amount)+'</div></div>':'')+'</div>';
+  if(j.invoices.length){h+='<div class="card"><div class="eyebrow">Invoices</div><table><thead><tr><th>No.</th><th>Due</th><th>Total</th><th>Status</th></tr></thead><tbody>'+j.invoices.map(function(i){return '<tr><td>'+esc(i.no)+'</td><td>'+esc(i.due)+'</td><td>'+m(i.total)+'</td><td><span class="st '+esc(i.status)+'">'+esc(i.status)+'</span></td></tr>'}).join("")+'</tbody></table>'+(j.payUrl&&/^https?:\/\//i.test(j.payUrl)?'<p><a class="btn" href="'+esc(j.payUrl)+'">Pay online</a></p>':'')+'</div>'}
+  h+='<div class="card"><div class="eyebrow">Time log</div><table><thead><tr><th>Date</th><th>Description</th><th>Time</th></tr></thead><tbody>'+j.entries.map(function(e){return '<tr><td>'+esc(e.date)+'</td><td class="d">'+(esc(e.desc)||"—")+'</td><td>'+hm(e.secs)+'</td></tr>'}).join("")+'</tbody></table></div>';
+  app.innerHTML=h;
+}).catch(function(){document.getElementById("app").innerHTML='<h1>Something went wrong</h1><p class="muted">Please try again later.</p>'});
+})();
+</script>
+</body>
+</html>

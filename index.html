@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Timesheet</title>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#1f6f5c"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="icon" href="/icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -111,6 +112,18 @@ tfoot td{font-weight:700;border-bottom:0}
 #toast button{background:none;border:0;color:inherit;font:700 14px var(--sans);text-decoration:underline;cursor:pointer;padding:0}
 .warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid var(--warn);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:14px}
 pre.out{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font:13px/1.5 ui-monospace,Menlo,monospace;max-height:50vh;overflow:auto}
+
+.invoice{background:#fff;color:#111;border-radius:10px;padding:26px;font-size:14px}
+.invoice table{color:#111}.invoice th,.invoice td{border-color:#ddd}.invoice th{color:#555}
+.inv-h,.inv-m{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
+.inv-t{font:600 30px var(--serif);letter-spacing:.04em}
+.inv-m span{color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.st{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;border:1px solid var(--line);color:var(--muted)}
+.st.paid{color:var(--accent);border-color:var(--accent)}.st.sent{color:var(--warn);border-color:var(--warn)}.st.over{color:var(--danger);border-color:var(--danger)}
+.ans{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}
+.keybox{font:13px ui-monospace,Menlo,monospace;word-break:break-all;background:var(--bg);border:1px dashed var(--accent);border-radius:10px;padding:10px;margin:10px 0}
+.foot-links{text-align:center;margin-top:28px;font-size:13px;color:var(--muted)}.foot-links a{color:var(--muted)}
+@media print{body>.wrap,#toast{display:none!important}body{background:#fff}#modal{position:static;display:block!important;background:none;padding:0}.sheet{border:0;max-width:none;padding:0;background:none}.sheet h3,.noprint{display:none!important}}
 </style>
 </head>
 <body>
@@ -133,19 +146,28 @@ let KEY=LEGACY;
 let user=null,authMode="login",authErr="",authInfo={needsCode:false};
 const COLORS=["#1f6f5c","#c2562f","#3b6fb6","#b9891c","#8a4fa0","#c04a77","#4c8a2f","#5b6b78"];
 let storageOK=true;
-function defaults(){return {projects:[],entries:[],timer:null,settings:{currency:"$",target:40,weekStart:1}}}
+function defaults(){return {projects:[],entries:[],timer:null,invoices:[],recurring:[],settings:{currency:"$",target:40,weekStart:1,biz:{name:"",address:"",email:"",taxId:"",taxRate:0,dueDays:14,payNote:"",payUrl:"",prefix:"INV-",nextNo:1}}}}
+function norm(o){const d=defaults();o.invoices=o.invoices||[];o.recurring=o.recurring||[];o.settings=o.settings||d.settings;o.settings.biz=Object.assign(d.settings.biz,o.settings.biz||{});return o}
 function load(){
   try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);const d=defaults();return {projects:o.projects||[],entries:o.entries||[],timer:o.timer||null,settings:Object.assign(d.settings,o.settings||{})}}}
   catch(e){storageOK=false}
   return defaults();
 }
 let S=defaults();
-let synced=false,pushT=null;
+let synced=false,pushT=null,lastAt=0;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false}schedulePush()}
 function schedulePush(){if(!synced)return;clearTimeout(pushT);pushT=setTimeout(push,400)}
 function push(){
-  fetch("/api/data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(S)}).then(r=>{if(r.status===401)signedOut("Session expired. Please sign in again.")}).catch(()=>{});
+  pushT=null;
+  return fetch("/api/data",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(S)}).then(async r=>{if(r.status===401)signedOut("Session expired. Please sign in again.");else if(r.ok){const j=await r.json().catch(()=>({}));if(j.updated_at)lastAt=j.updated_at}}).catch(()=>{});
 }
+async function flush(){if(pushT){clearTimeout(pushT)}await push()}
+async function refresh(){
+  try{const r=await fetch("/api/data",{cache:"no-store"});if(!r.ok)return;const j=await r.json();
+    if(j.state&&j.updated_at>lastAt){S=norm(Object.assign(defaults(),j.state));lastAt=j.updated_at;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}}catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&user&&synced&&!pushT)refresh()});
+function api(path,method,body){return fetch(path,{method:method||"GET",headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined}).then(async r=>{const j=await r.json().catch(()=>({}));if(r.status===401&&user){signedOut("Session expired. Please sign in again.");throw new Error("Signed out")}if(!r.ok)throw new Error(j.error||"Request failed");return j})}
 function readLegacy(){
   try{const r=localStorage.getItem(LEGACY);if(!r)return null;const o=JSON.parse(r),d=defaults();return {projects:o.projects||[],entries:o.entries||[],timer:o.timer||null,settings:Object.assign(d.settings,o.settings||{})}}catch(e){return null}
 }
@@ -155,9 +177,11 @@ async function hydrate(){
     if(r.status===401){signedOut("Session expired. Please sign in again.");return}
     if(!r.ok)throw 0;
     const j=await r.json(),d=defaults();
+    lastAt=j.updated_at||0;
     if(j.state){S={projects:j.state.projects||[],entries:j.state.entries||[],timer:j.state.timer||null,settings:Object.assign(d.settings,j.state.settings||{})};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
     else if(!S.projects.length&&!S.entries.length){const l=readLegacy();if(l)S=l}
     synced=true;
+    norm(S);if(applyRecurring())save();
     if(!j.state&&(S.projects.length||S.entries.length))push();
     render();
   }catch(e){}
@@ -190,7 +214,7 @@ function renderAuth(){
    +(reg&&authInfo.needsCode?'<div class="field"><label class="f" for="a-c">Invite code</label><input id="a-c" autocomplete="off" maxlength="100"></div>':"")
    +'<div class="err" id="a-err">'+esc(authErr)+'</div>'
    +'<button class="btn primary" data-a="auth-submit" style="width:100%">'+(reg?"Create account":"Sign in")+'</button>'
-   +'<p class="muted small" style="text-align:center;margin:14px 0 0">'+(reg?"Already have an account?":"New here?")+' <button class="btn ghost sm" data-a="auth-toggle">'+(reg?"Sign in":"Create an account")+'</button></p></section>';
+   +'<p class="muted small" style="text-align:center;margin:14px 0 0">'+(reg?"Already have an account?":"New here?")+' <button class="btn ghost sm" data-a="auth-toggle">'+(reg?"Sign in":"Create an account")+'</button></p></section><p class="foot-links"><a href="/about">About</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>';
   document.title="Sign in · Timesheet";
   const e=$("#a-e");if(e)e.focus();
 }
@@ -281,7 +305,7 @@ function renderHeader(){
   const w=wkStart(today());
   const secs=secsBetween(w,addDays(w,6))+(S.timer&&S.timer.start>=pYmd(w).getTime()?runningSecs():0);
   $("#hdr").innerHTML='<span class="chip">This week <b>'+hm(secs)+"</b> / "+S.settings.target+'h</span><span class="chip">'+esc(user.email)+'</span><button class="btn sm" data-a="logout">Sign out</button>';
-  const names={track:"Track",week:"Week",projects:"Projects",reports:"Reports"};
+  const names={track:"Track",week:"Week",projects:"Projects",reports:"Reports",invoices:"Invoices",team:"Team",account:"Account"};
   $("#tabs").innerHTML=Object.keys(names).map(k=>'<button role="tab" data-a="tab" data-v="'+k+'" aria-selected="'+(ui.tab===k)+'">'+names[k]+"</button>").join("");
 }
 function emptyState(){
@@ -298,12 +322,12 @@ function viewTrack(){
   const opts=act.map(p=>'<option value="'+p.id+'"'+((t?t.projectId===p.id:false)?" selected":"")+">"+esc(p.name)+(p.client?" · "+esc(p.client):"")+"</option>").join("");
   const tcur=t&&!act.find(p=>p.id===t.projectId)?'<option value="'+t.projectId+'" selected>'+esc((proj(t.projectId)||{}).name)+"</option>":"";
   const td=secsBetween(today(),today());
-  let h='<section class="card timer'+(t?" live":"")+'"><div class="eyebrow">'+(t?"Tracking now":"Timer")+'</div><div class="clock" id="clock">'+clock(runningSecs())+'</div>'
+  let h=(t&&runningSecs()>14400?'<div class="warn">Your timer has been running for <b>'+clock(runningSecs())+'</b>. Still working? Stop it if you forgot.</div>':"")+'<section class="card timer'+(t?" live":"")+'"><div class="eyebrow">'+(t?"Tracking now":"Timer")+'</div><div class="clock" id="clock">'+clock(runningSecs())+'</div>'
    +'<div class="fields grid2"><div><label class="f" for="tp">Project</label><select id="tp"'+(t?" disabled":"")+">"+tcur+opts+'</select></div><div><label class="f" for="td">What are you working on?</label><input id="td" placeholder="e.g. Homepage wireframes" value="'+esc(t?t.desc:"")+'" maxlength="140"></div></div>'
    +'<div class="row"><label class="chk"><input type="checkbox" id="tb" '+((t?t.billable:true)?"checked":"")+(t?" disabled":"")+"> Billable</label>"
    +(t?'<button class="btn primary" data-a="stop" style="min-width:150px">Stop &amp; save</button><button class="btn ghost" data-a="discard">Discard</button>':'<button class="btn primary" data-a="start" style="min-width:150px">▶ Start timer</button>')
    +'</div><p class="muted small" style="margin:14px 0 0">Today <b style="color:var(--ink)">'+hm(td+runningSecs())+"</b> logged</p></section>";
-  h+='<section class="card"><h2>Quick add with AI</h2><label class="f" for="ai-t">Describe your time in plain words</label><textarea id="ai-t" rows="3" maxlength="4000" placeholder="e.g. Yesterday 2h on Brand website homepage layout, and 90 min on the retainer reporting this morning">'+esc(ui.aiText)+'</textarea><div class="row" style="margin-top:10px"><button class="btn primary" data-a="ai-parse" id="ai-b">Parse &amp; preview</button><span class="muted small">You review everything before it is saved.</span></div></section>';
+  h+='<section class="card"><h2>Quick add with AI</h2><label class="f" for="ai-t">Describe your time in plain words</label><textarea id="ai-t" rows="3" maxlength="4000" placeholder="e.g. Yesterday 2h on Brand website homepage layout, and 90 min on the retainer reporting this morning">'+esc(ui.aiText)+'</textarea><div class="row" style="margin-top:10px"><button class="btn primary" data-a="ai-parse" id="ai-b">Parse &amp; preview</button>'+((window.SpeechRecognition||window.webkitSpeechRecognition)?'<button class="btn" data-a="ai-voice" id="ai-v">\u{1F3A4} Dictate</button>':"")+'<span class="muted small">You review everything before it is saved.</span></div></section>';
   h+='<section class="card"><h2>Add time manually</h2><div class="row" style="align-items:flex-end"><div style="width:150px"><label class="f" for="md">Date</label><input type="date" id="md" value="'+today()+'"></div><div class="grow"><label class="f" for="mp">Project</label><select id="mp">'+act.map(p=>'<option value="'+p.id+'">'+esc(p.name)+"</option>").join("")+'</select></div><div style="width:110px"><label class="f" for="mt">Time</label><input id="mt" placeholder="1:30" inputmode="text"></div></div><div class="row" style="margin-top:10px;align-items:flex-end"><div class="grow"><label class="f" for="mx">Description</label><input id="mx" maxlength="140" placeholder="Optional"></div><label class="chk" style="padding-bottom:10px"><input type="checkbox" id="mb" checked> Billable</label><button class="btn primary" data-a="add-manual">Add</button></div><div class="err" id="merr"></div><p class="muted small" style="margin:0">Accepts 1:30, 1.5, 90m or 1h30m.</p></section>';
   const dates=[...new Set(S.entries.map(e=>e.date))].sort().reverse();
   const shown=ui.showAll?dates:dates.slice(0,7);
@@ -341,7 +365,7 @@ function viewProjects(){
     const st=projStats(p),bud=p.budget>0?st.secs/3600/p.budget*100:null;
     h+='<div class="proj'+(p.archived?" arch":"")+'"><span class="dot" style="background:'+p.color+';width:14px;height:14px"></span><div class="grow"><b>'+esc(p.name)+"</b>"+(p.archived?'<span class="tag">archived</span>':"")+'<div class="muted small">'+(esc(p.client)||"No client")+" · "+money(p.rate||0)+"/hr · "+hm(st.secs)+" logged · "+money(st.amt)+" billable</div>"
      +(bud!==null?'<div class="bar'+(bud>100?" over":"")+'" style="margin-top:8px;max-width:320px"><i style="width:'+Math.min(100,bud)+'%"></i></div><div class="muted small">'+Math.round(bud)+"% of "+p.budget+"h budget"+(bud>100?" — over budget":"")+"</div>":"")
-     +'</div><button class="btn sm" data-a="edit-project" data-id="'+p.id+'">Edit</button><button class="btn sm" data-a="arch-project" data-id="'+p.id+'">'+(p.archived?"Restore":"Archive")+"</button></div>";
+     +'</div><button class="btn sm" data-a="share-project" data-id="'+p.id+'">Share</button><button class="btn sm" data-a="edit-project" data-id="'+p.id+'">Edit</button><button class="btn sm" data-a="arch-project" data-id="'+p.id+'">'+(p.archived?"Restore":"Archive")+"</button></div>";
   });
   h+="</section>";
   const s=S.settings;
@@ -383,21 +407,157 @@ function viewReports(){
   else h+='<div class="scroll"><table><thead><tr><th>Project</th><th>Time</th><th>Billable</th><th>Earned</th><th style="width:30%"></th></tr></thead><tbody>'+by.map(r=>'<tr><td><span class="dot" style="background:'+r.p.color+'"></span> '+esc(r.p.name)+"</td><td>"+hm(r.secs)+"</td><td>"+hm(r.bs)+"</td><td>"+money(r.amt)+'</td><td><div class="bar"><i style="width:'+r.secs/tot*100+"%;background:"+r.p.color+'"></i></div></td></tr>').join("")+"</tbody></table></div>";
   h+='<div style="margin-top:12px"><button class="btn sm" data-a="csv-range">Export this range as CSV</button></div></section>';
   // invoice
-  const cand=by.filter(r=>r.bs>0).map(r=>r.p);
+  h+=askCard();
+  const cand=S.projects.filter(p=>list.some(e=>e.projectId===p.id&&e.billable&&!e.invoiceId));
   if(cand.length){
     if(!cand.find(p=>p.id===ui.inv))ui.inv=cand[0].id;
-    const p=proj(ui.inv),items=list.filter(e=>e.projectId===p.id&&e.billable).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
+    const p=proj(ui.inv),items=list.filter(e=>e.projectId===p.id&&e.billable&&!e.invoiceId).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
     const lines=items.map(e=>({e,amt:r2(e.secs/3600*(p.rate||0))})),total=sum(lines,l=>l.amt);
     h+='<section class="card"><h2>Invoice builder</h2><div class="row" style="margin-bottom:12px"><div class="grow"><label class="f" for="inv-p">Project</label><select id="inv-p">'+cand.map(c=>'<option value="'+c.id+'"'+(c.id===ui.inv?" selected":"")+">"+esc(c.name)+"</option>").join("")+'</select></div><div style="width:150px"><label class="f" for="inv-n">Invoice no.</label><input id="inv-n" value="'+esc(ui.invNo)+'" placeholder="Optional"></div></div><div class="scroll"><table><thead><tr><th>Date</th><th style="text-align:left">Description</th><th>Hours</th><th>Amount</th></tr></thead><tbody>'
      +lines.map(l=>"<tr><td>"+l.e.date+'</td><td style="text-align:left;white-space:normal">'+(esc(l.e.desc)||"—")+"</td><td>"+dec(l.e.secs)+"</td><td>"+money(l.amt)+"</td></tr>").join("")
-     +"</tbody><tfoot><tr><td colspan=\"2\">"+esc(p.client||p.name)+" · "+money(p.rate||0)+'/hr</td><td>'+dec(sum(items,e=>e.secs))+"</td><td>"+money(total)+'</td></tr></tfoot></table></div><div class="row" style="margin-top:14px"><button class="btn primary" data-a="inv-copy">Copy invoice text</button><button class="btn" data-a="inv-csv">Download CSV</button></div></section>';
+     +"</tbody><tfoot><tr><td colspan=\"2\">"+esc(p.client||p.name)+" · "+money(p.rate||0)+'/hr</td><td>'+dec(sum(items,e=>e.secs))+"</td><td>"+money(total)+'</td></tr></tfoot></table></div><div class="row" style="margin-top:14px"><button class="btn primary" data-a="inv-create">Create invoice</button><button class="btn" data-a="inv-copy">Copy text</button><button class="btn" data-a="inv-csv">Download CSV</button></div><p class="muted small" style="margin:10px 0 0">Entries already on an invoice are excluded, so nothing is billed twice.</p></section>';
   }
   return h;
 }
+/* ---------- recurring ---------- */
+function applyRecurring(){
+  norm(S);let changed=false;const t=today();
+  S.recurring.forEach(r=>{
+    const p=proj(r.projectId);if(!p||p.archived)return;
+    let d=r.last?addDays(r.last,1):r.start,n=0;
+    while(d<=t&&n++<400){
+      if(r.days.includes(pYmd(d).getDay())){S.entries.push({id:uid(),projectId:r.projectId,date:d,secs:r.secs,desc:r.desc||"",billable:r.billable,created:Date.now()+n,recurring:r.id});changed=true}
+      d=addDays(d,1);
+    }
+    if(r.last!==t){r.last=t;changed=true}
+  });
+  return changed;
+}
+/* ---------- voice ---------- */
+function voice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast("Voice input isn't supported in this browser");return}
+  const r=new SR(),b=$("#ai-v");r.lang=navigator.language||"en-US";r.interimResults=false;
+  if(b)b.textContent="Listening\u2026";
+  r.onresult=e=>{const t=Array.from(e.results).map(x=>x[0].transcript).join(" ");ui.aiText=(ui.aiText?ui.aiText+" ":"")+t;const ta=$("#ai-t");if(ta)ta.value=ui.aiText};
+  r.onend=()=>{const bb=$("#ai-v");if(bb)bb.textContent="\u{1F3A4} Dictate"};
+  r.onerror=()=>toast("Couldn't hear that. Check microphone permission.");
+  r.start();
+}
+/* ---------- ask your data ---------- */
+function askCard(){
+  return '<section class="card"><h2>Ask your data</h2><div class="row"><input class="grow" id="ask-q" maxlength="500" placeholder="e.g. How much did I earn from Fernwood last month?" value="'+esc(ui.askQ||"")+'"><button class="btn primary" data-a="ask-go" id="ask-b">Ask</button></div>'+(ui.askAns?'<div class="ans">'+esc(ui.askAns)+"</div>":"")+"</section>";
+}
+async function askGo(){
+  const q=(ui.askQ||"").trim(),b=$("#ask-b");if(!q){toast("Type a question first");return}
+  b.disabled=true;b.textContent="Thinking\u2026";
+  try{
+    const j=await api("/api/parse","POST",{mode:"ask",question:q,today:today(),currency:S.settings.currency,projects:S.projects.map(p=>({name:p.name,client:p.client,rate:p.rate,budget:p.budget})),entries:S.entries.slice(-3000).map(e=>[e.date,(proj(e.projectId)||{}).name||"?",+dec(e.secs),e.billable?1:0])});
+    ui.askAns=j.answer||"No answer.";
+  }catch(e){if(e.message==="Signed out")return;ui.askAns="Couldn't answer: "+e.message}
+  render();
+}
+/* ---------- invoices ---------- */
+function createInvoice(){
+  const p=proj(ui.inv);if(!p)return;
+  const [a,b]=rangeBounds(),bz=S.settings.biz;
+  const items=S.entries.filter(e=>e.projectId===p.id&&e.billable&&!e.invoiceId&&e.date>=a&&e.date<=b).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
+  if(!items.length){toast("Nothing to invoice in this range");return}
+  const lines=items.map(e=>({date:e.date,desc:e.desc||"Work",secs:e.secs,amt:r2(e.secs/3600*(p.rate||0))}));
+  const subtotal=r2(sum(lines,l=>l.amt)),tax=r2(subtotal*(bz.taxRate||0)/100),id=uid();
+  const custom=(ui.invNo||"").trim(),auto=(bz.prefix||"")+String(bz.nextNo||1).padStart(3,"0");
+  S.invoices.push({id:id,no:custom||auto,projectId:p.id,from:a,to:b,issued:today(),due:addDays(today(),bz.dueDays||14),status:"draft",currency:S.settings.currency,rate:p.rate||0,taxRate:bz.taxRate||0,lines:lines,subtotal:subtotal,tax:tax,total:r2(subtotal+tax)});
+  if(!custom)bz.nextNo=(bz.nextNo||1)+1;
+  ui.invNo="";items.forEach(e=>{e.invoiceId=id});save();ui.tab="invoices";render();invoiceModal(id);
+}
+function invoiceModal(id){
+  const i=S.invoices.find(x=>x.id===id);if(!i)return;
+  const p=proj(i.projectId)||{name:"(deleted project)",client:""},bz=S.settings.biz;
+  const m=n=>i.currency+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const body='<div class="invoice"><div class="inv-h"><div><div class="inv-t">INVOICE</div><div>#'+esc(i.no)+'</div></div><div style="text-align:right"><b>'+esc(bz.name||"Your business")+"</b>"+(bz.address?"<br>"+esc(bz.address).replace(/\n/g,"<br>"):"")+(bz.email?"<br>"+esc(bz.email):"")+(bz.taxId?"<br>Tax ID: "+esc(bz.taxId):"")+"</div></div>"
+   +'<div class="inv-m"><div><span>Bill to</span><br><b>'+esc(p.client||p.name)+"</b><br>"+esc(p.name)+"</div><div><span>Issued</span> "+i.issued+"<br><span>Due</span> "+i.due+"<br><span>Period</span> "+i.from+" \u2013 "+i.to+"</div></div>"
+   +'<table><thead><tr><th>Date</th><th style="text-align:left">Description</th><th>Hours</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+i.lines.map(l=>"<tr><td>"+l.date+'</td><td style="text-align:left;white-space:normal">'+esc(l.desc)+"</td><td>"+dec(l.secs)+"</td><td>"+m(i.rate)+"</td><td>"+m(l.amt)+"</td></tr>").join("")
+   +'</tbody><tfoot><tr><td colspan="4" style="text-align:right">Subtotal</td><td>'+m(i.subtotal)+"</td></tr>"+(i.taxRate?'<tr><td colspan="4" style="text-align:right">Tax ('+i.taxRate+'%)</td><td>'+m(i.tax)+"</td></tr>":"")+'<tr><td colspan="4" style="text-align:right">Total due</td><td>'+m(i.total)+"</td></tr></tfoot></table>"
+   +(bz.payNote?'<p style="margin-top:20px;white-space:pre-wrap">'+esc(bz.payNote)+"</p>":"")+(bz.payUrl&&/^https?:\/\//i.test(bz.payUrl)?'<p>Pay online: <a href="'+esc(bz.payUrl)+'">'+esc(bz.payUrl)+"</a></p>":"")+(i.status==="paid"?'<p style="color:#1f6f5c;font-weight:700">PAID</p>':"")+"</div>";
+  openModal("Invoice "+i.no,body+'<div class="foot noprint"><button class="btn" data-a="close">Close</button><button class="btn primary" data-a="print">Print / Save as PDF</button></div>',true);
+}
+function invTotals(){const t=today();let out=0,over=0,paid=0;S.invoices.forEach(i=>{if(i.status==="paid")paid+=i.total;else if(i.status==="sent"){out+=i.total;if(i.due<t)over+=i.total}});return{out:out,over:over,paid:paid}}
+function viewInvoices(){
+  const t=today(),tt=invTotals(),list=S.invoices.slice().sort((a,b)=>a.issued<b.issued?1:a.issued>b.issued?-1:0);
+  let h='<div class="tiles"><div class="tile"><div class="eyebrow">Outstanding</div><div class="v">'+money(tt.out)+'</div></div><div class="tile"><div class="eyebrow">Overdue</div><div class="v" style="color:'+(tt.over?"var(--danger)":"inherit")+'">'+money(tt.over)+'</div></div><div class="tile"><div class="eyebrow">Paid</div><div class="v">'+money(tt.paid)+'</div></div><div class="tile"><div class="eyebrow">Invoices</div><div class="v">'+list.length+"</div></div></div>";
+  h+='<section class="card"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2 style="margin:0">Invoices</h2><div class="row"><button class="btn sm" data-a="acct-csv" data-v="xero">Xero CSV</button><button class="btn sm" data-a="acct-csv" data-v="qb">QuickBooks CSV</button></div></div>';
+  if(!list.length)h+='<p class="muted">No invoices yet. Go to Reports, pick a project and date range, then click Create invoice. Fill in your business details under Account first.</p>';
+  else h+='<div class="scroll"><table><thead><tr><th>No.</th><th>Client / project</th><th>Issued</th><th>Due</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>'+list.map(i=>{
+    const p=proj(i.projectId)||{name:"(deleted)",client:""},ov=i.status==="sent"&&i.due<t,next=i.status==="draft"?["sent","Mark sent"]:i.status==="sent"?["paid","Mark paid"]:["sent","Reopen"];
+    return "<tr><td>"+esc(i.no)+'</td><td style="text-align:left">'+esc(p.client||p.name)+"</td><td>"+i.issued+"</td><td>"+i.due+"</td><td>"+money(i.total)+'</td><td><span class="st '+(ov?"over":i.status)+'">'+(ov?"overdue":i.status)+'</span></td><td><button class="btn ghost sm" data-a="inv-view" data-id="'+i.id+'">View</button><button class="btn ghost sm" data-a="inv-status" data-id="'+i.id+'" data-v="'+next[0]+'">'+next[1]+'</button><button class="btn ghost sm" data-a="inv-del" data-id="'+i.id+'" aria-label="Delete invoice">\u2715</button></td></tr>';
+  }).join("")+"</tbody></table></div>";
+  return h+"</section>";
+}
+function accountingCsv(kind){
+  const rows=[];
+  S.invoices.forEach(i=>{const p=proj(i.projectId)||{name:"",client:""},who=p.client||p.name;
+    i.lines.forEach(l=>{rows.push(kind==="xero"?[who,i.no,i.issued,i.due,l.date+" "+l.desc,dec(l.secs),i.rate,"200",i.taxRate?"Tax on Sales":"Tax Exempt"]:[i.no,who,i.issued,i.due,"Services",l.date+" "+l.desc,dec(l.secs),i.rate,l.amt.toFixed(2)])})});
+  if(!rows.length){toast("No invoices to export");return}
+  const head=kind==="xero"?["*ContactName","*InvoiceNumber","*InvoiceDate","*DueDate","Description","*Quantity","*UnitAmount","*AccountCode","*TaxType"]:["InvoiceNo","Customer","InvoiceDate","DueDate","Item(Product/Service)","ItemDescription","ItemQuantity","ItemRate","ItemAmount"];
+  saveFile((kind==="xero"?"xero":"quickbooks")+"-invoices.csv",[head].concat(rows).map(r=>r.map(csvCell).join(",")).join("\n"));
+}
+/* ---------- client portal ---------- */
+async function shareModal(pid){
+  try{
+    await flush();
+    const j=await api("/api/portal","POST",{action:"create",projectId:pid}),url=location.origin+"/portal?t="+j.token;
+    openModal("Share with your client",'<p class="muted small" style="margin-top:0">Anyone with this link can see this project\'s hours'+((proj(pid)||{}).rate>0?", amounts":"")+' and sent invoices, read-only. Revoke it any time.</p><input id="share-url" readonly value="'+esc(url)+'"><div class="foot"><button class="btn danger" data-a="share-revoke" data-v="'+esc(j.token)+'" style="margin-right:auto">Revoke link</button><button class="btn" data-a="close">Close</button><button class="btn primary" data-a="share-copy">Copy link</button></div>');
+  }catch(e){if(e.message!=="Signed out")toast(e.message)}
+}
+/* ---------- team ---------- */
+function teamRangeKey(){const r=rangeBounds();return r[0]+r[1]}
+function loadTeam(force){
+  const key=teamRangeKey();if(ui.teamBusy||(!force&&ui.teamKey===key))return;
+  const r=rangeBounds();ui.teamBusy=true;
+  api("/api/team?from="+r[0]+"&to="+r[1]).then(j=>{ui.team=j;ui.teamErr=""}).catch(e=>{ui.teamErr=e.message}).finally(()=>{ui.teamKey=key;ui.teamBusy=false;if(ui.tab==="team")render()});
+}
+function viewTeam(){
+  loadTeam();
+  const j=ui.team;
+  if(ui.teamErr)return '<section class="card"><p class="muted">'+esc(ui.teamErr)+"</p></section>";
+  if(!j)return '<section class="card"><p class="muted">Loading team\u2026</p></section>';
+  if(!j.team)return '<div class="grid2"><section class="card"><h2>Create a team</h2><p class="muted small" style="margin-top:0">You\'ll get a join code to share. As owner you can see each member\'s hours and billable totals.</p><div class="field"><label class="f" for="t-name">Team name</label><input id="t-name" maxlength="60"></div><button class="btn primary" data-a="team-create">Create team</button></section><section class="card"><h2>Join a team</h2><p class="muted small" style="margin-top:0">Joining lets the team owner see your tracked hours, billable time and earnings totals.</p><div class="field"><label class="f" for="t-code">Join code</label><input id="t-code" maxlength="20" style="text-transform:uppercase"></div><button class="btn primary" data-a="team-join">Join</button></section></div>';
+  if(j.team.role==="member")return '<section class="card"><h2>'+esc(j.team.name)+'</h2><p class="muted">You are a member of this team. The owner can see your tracked hours, billable time and earnings totals (not your entry descriptions).</p><button class="btn danger" data-a="team-leave">Leave team</button></section>';
+  const rs={week:"This week",lastweek:"Last week",month:"This month",lastmonth:"Last month","30":"Last 30 days"};
+  if(!rs[ui.range])ui.range="week";
+  const ms=j.members||[],tot=sum(ms,m=>m.secs),mx=Math.max(1,...ms.map(m=>m.secs));
+  let h='<section class="card"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Team</div><h2 style="margin:0">'+esc(j.team.name)+'</h2></div><div style="text-align:right"><div class="eyebrow">Join code</div><b style="font:600 20px var(--serif);letter-spacing:.1em">'+esc(j.team.code)+'</b> <button class="btn ghost sm" data-a="team-rotate">New code</button></div></div></section>';
+  h+='<div class="chips">'+Object.keys(rs).map(k=>'<button data-a="range" data-v="'+k+'" aria-pressed="'+(ui.range===k)+'">'+rs[k]+"</button>").join("")+"</div>";
+  h+='<section class="card"><h2>Hours by member</h2><div class="scroll"><table><thead><tr><th>Member</th><th>Time</th><th>Billable</th><th>Earned</th><th style="width:28%"></th><th></th></tr></thead><tbody>'+ms.map(m=>"<tr><td>"+esc(m.email)+(m.owner?' <span class="tag">owner</span>':"")+"</td><td>"+hm(m.secs)+"</td><td>"+hm(m.billableSecs)+"</td><td>"+money(m.amount)+'</td><td><div class="bar"><i style="width:'+m.secs/mx*100+'%"></i></div></td><td>'+(m.owner?"":'<button class="btn ghost sm" data-a="team-remove" data-id="'+m.userId+'">Remove</button>')+"</td></tr>").join("")+"</tbody><tfoot><tr><td>Total</td><td>"+hm(tot)+"</td><td>"+hm(sum(ms,m=>m.billableSecs))+"</td><td>"+money(sum(ms,m=>m.amount))+'</td><td></td><td></td></tr></tfoot></table></div><div class="row" style="margin-top:12px"><button class="btn sm" data-a="team-csv">Export CSV</button><button class="btn sm danger" data-a="team-leave">Disband team</button></div></section>';
+  return h;
+}
+/* ---------- account ---------- */
+function loadKeys(){
+  if(ui.keysBusy||ui.keys)return;ui.keysBusy=true;
+  api("/api/account","POST",{action:"keys-list"}).then(j=>{ui.keys=j.keys}).catch(()=>{ui.keys=[]}).finally(()=>{ui.keysBusy=false;if(ui.tab==="account")render()});
+}
+function viewAccount(){
+  loadKeys();
+  const bz=S.settings.biz,days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],act=S.projects.filter(p=>!p.archived);
+  const bi=(id,label,val,type,w)=>'<div class="field" style="flex:1 1 '+(w||200)+'px"><label class="f" for="b-'+id+'">'+label+'</label><input id="b-'+id+'" type="'+(type||"text")+'" value="'+esc(val)+'"'+(type==="number"?' min="0" step="any"':"")+"></div>";
+  let h='<section class="card"><h2>Business details (shown on invoices)</h2><div class="row">'+bi("name","Business name",bz.name)+bi("email","Email",bz.email)+bi("taxId","Tax ID",bz.taxId,"text",140)+'</div><div class="field"><label class="f" for="b-address">Address</label><textarea id="b-address" rows="2">'+esc(bz.address)+'</textarea></div><div class="row">'+bi("prefix","Invoice prefix",bz.prefix,"text",110)+bi("nextNo","Next number",bz.nextNo,"number",110)+bi("taxRate","Tax %",bz.taxRate,"number",100)+bi("dueDays","Due in (days)",bz.dueDays,"number",110)+'</div>'+bi("payUrl","Payment link (e.g. a Stripe or PayPal link)",bz.payUrl,"url",300)+'<div class="field"><label class="f" for="b-payNote">Payment instructions</label><textarea id="b-payNote" rows="2" placeholder="Bank details, terms, thank-you note">'+esc(bz.payNote)+"</textarea></div></section>";
+  h+='<section class="card"><h2>Recurring entries</h2><p class="muted small" style="margin-top:0">Automatically logged on the days you choose, for example a daily standup or a retainer block.</p>';
+  h+=S.recurring.length?S.recurring.map(r=>'<div class="entry"><span class="dot" style="background:'+((proj(r.projectId)||{}).color||"#999")+'"></span><div class="t"><b>'+esc((proj(r.projectId)||{name:"(deleted)"}).name)+" \u00b7 "+hm(r.secs)+"</b><span>"+r.days.map(d=>days[d]).join(", ")+(r.desc?" \u00b7 "+esc(r.desc):"")+'</span></div><button class="btn ghost sm" data-a="rc-del" data-id="'+r.id+'">\u2715</button></div>').join(""):'<p class="muted small">None yet.</p>';
+  h+=act.length?'<div class="row" style="margin-top:12px;align-items:flex-end"><div class="grow"><label class="f" for="rc-p">Project</label><select id="rc-p">'+act.map(p=>'<option value="'+p.id+'">'+esc(p.name)+"</option>").join("")+'</select></div><div style="width:90px"><label class="f" for="rc-t">Time</label><input id="rc-t" placeholder="0:30"></div><div class="grow"><label class="f" for="rc-x">Description</label><input id="rc-x" maxlength="140"></div></div><div class="row" style="margin-top:10px">'+[1,2,3,4,5,6,0].map(d=>'<label class="chk"><input type="checkbox" id="rc-d'+d+'"'+(d>=1&&d<=5?" checked":"")+"> "+days[d]+"</label>").join("")+'<button class="btn primary" data-a="rc-add">Add rule</button></div>':"";
+  h+="</section>";
+  h+='<section class="card"><h2>API &amp; automations</h2><p class="muted small" style="margin-top:0">Send entries from Zapier, Make, a script or a shortcut: <code>POST '+esc(location.origin)+'/api/v1/entries</code> with header <code>Authorization: Bearer &lt;key&gt;</code> and JSON like <code>{"project":"Brand website","minutes":90,"description":"Call"}</code>.</p>';
+  if(ui.newKey)h+='<div class="keybox">'+esc(ui.newKey)+'</div><p class="small" style="color:var(--warn);margin-top:0">Copy this key now. It will not be shown again.</p>';
+  h+=(ui.keys||[]).map(k=>'<div class="entry"><div class="t"><b>'+esc(k.label)+"</b><span>Created "+new Date(k.created).toLocaleDateString()+(k.lastUsed?" \u00b7 last used "+new Date(k.lastUsed).toLocaleDateString():" \u00b7 never used")+'</span></div><button class="btn ghost sm" data-a="key-revoke" data-id="'+k.id+'">Revoke</button></div>').join("");
+  h+='<div class="row" style="margin-top:12px"><input id="k-label" class="grow" placeholder="Key name, e.g. Zapier" maxlength="40"><button class="btn" data-a="key-create">Create API key</button></div></section>';
+  h+='<section class="card"><h2>Account</h2><p class="muted small" style="margin-top:0">Signed in as <b>'+esc(user.email)+'</b>.</p><div class="row" style="align-items:flex-end"><div><label class="f" for="pw-c">Current password</label><input id="pw-c" type="password" autocomplete="current-password"></div><div><label class="f" for="pw-n">New password</label><input id="pw-n" type="password" autocomplete="new-password"></div><button class="btn" data-a="pw-change">Change password</button></div><div class="err" id="pw-err"></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><div class="row"><button class="btn" data-a="backup">Download all my data (JSON)</button><button class="btn danger" data-a="acct-delete">Delete my account\u2026</button></div></section>';
+  return h;
+}
+
 function render(){
   if(!user){renderAuth();return}
+  norm(S);
   renderHeader();
-  const v={track:viewTrack,week:viewWeek,projects:viewProjects,reports:viewReports}[ui.tab]();
+  const v={track:viewTrack,week:viewWeek,projects:viewProjects,reports:viewReports,invoices:viewInvoices,team:viewTeam,account:viewAccount}[ui.tab]();
   const warn=storageOK?"":'<div class="warn">This view cannot save to your browser, so changes will be lost when you close it. Use <b>Backup (JSON)</b> under Projects to keep your data.</div>';
   $("#main").innerHTML=warn+v;
   document.title=(S.timer?"⏱ "+clock(runningSecs())+" · ":"")+"Timesheet";
@@ -417,7 +577,7 @@ function projectModal(id){
 }
 function invoiceText(){
   const [a,b]=rangeBounds(),p=proj(ui.inv);if(!p)return"";
-  const items=S.entries.filter(e=>e.projectId===p.id&&e.billable&&e.date>=a&&e.date<=b).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
+  const items=S.entries.filter(e=>e.projectId===p.id&&e.billable&&!e.invoiceId&&e.date>=a&&e.date<=b).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0);
   const lines=items.map(e=>({e,amt:r2(e.secs/3600*(p.rate||0))})),total=sum(lines,l=>l.amt);
   return "INVOICE"+(ui.invNo?" #"+ui.invNo:"")+"\nProject: "+p.name+(p.client?"\nClient: "+p.client:"")+"\nPeriod: "+a+" to "+b+"\n\n"+lines.map(l=>l.e.date+"  "+(l.e.desc||"Work")+"  "+dec(l.e.secs)+"h  "+money(l.amt)).join("\n")+"\n\nTotal hours: "+dec(sum(items,e=>e.secs))+"\nRate: "+money(p.rate||0)+"/hr\nTOTAL DUE: "+money(total);
 }
@@ -499,6 +659,41 @@ document.addEventListener("click",async ev=>{
     case "logout":{
       try{await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"logout"})})}catch(e){}
       authMode="login";signedOut("");break}
+    case "inv-create":createInvoice();break;
+    case "inv-view":invoiceModal(id);break;
+    case "inv-status":{const i=S.invoices.find(x=>x.id===id);if(i){i.status=el.dataset.v;save();render()}break}
+    case "inv-del":confirmModal("Delete invoice?","The invoice is removed and its entries become billable again.","Delete",()=>{S.invoices=S.invoices.filter(x=>x.id!==id);S.entries.forEach(e=>{if(e.invoiceId===id)delete e.invoiceId});save();render()});break;
+    case "print":window.print();break;
+    case "acct-csv":accountingCsv(el.dataset.v);break;
+    case "share-project":shareModal(id);break;
+    case "share-copy":{const u=$("#share-url");if(u){u.select();if(!(await copyText(u.value,"Link copied")))toast("Select the link and copy it")}break}
+    case "share-revoke":try{await api("/api/portal","POST",{action:"revoke",token:el.dataset.v});closeModal();toast("Link revoked")}catch(e){toast(e.message)}break;
+    case "ai-voice":voice();break;
+    case "ask-go":askGo();break;
+    case "team-create":case "team-join":{
+      try{await api("/api/team","POST",a==="team-create"?{action:"create",name:$("#t-name").value}:{action:"join",code:$("#t-code").value});ui.team=null;ui.teamKey=null;render()}catch(e){toast(e.message)}break}
+    case "team-leave":confirmModal("Leave team?","Owners disband the whole team; members just leave. This can't be undone.","Confirm",async()=>{try{await api("/api/team","POST",{action:"leave"});ui.team=null;ui.teamKey=null;render()}catch(e){toast(e.message)}});break;
+    case "team-rotate":try{await api("/api/team","POST",{action:"rotate"});ui.teamKey=null;render();toast("New join code created")}catch(e){toast(e.message)}break;
+    case "team-remove":try{await api("/api/team","POST",{action:"remove",userId:id});ui.teamKey=null;render()}catch(e){toast(e.message)}break;
+    case "team-csv":{const ms=(ui.team&&ui.team.members)||[];const [x,y]=rangeBounds();saveFile("team-"+x+"-to-"+y+".csv",[["Member","Hours","Billable hours","Earned"]].concat(ms.map(m=>[m.email,dec(m.secs),dec(m.billableSecs),m.amount.toFixed(2)])).map(r=>r.map(csvCell).join(",")).join("\n"));break}
+    case "rc-add":{
+      const secs=parseDur($("#rc-t").value),days=[0,1,2,3,4,5,6].filter(d=>$("#rc-d"+d)&&$("#rc-d"+d).checked);
+      if(!secs||secs>86400){toast("Enter a time like 0:30 or 1.5");break}
+      if(!days.length){toast("Pick at least one day");break}
+      S.recurring.push({id:uid(),projectId:$("#rc-p").value,secs:secs,desc:$("#rc-x").value.trim(),billable:true,days:days,start:today(),last:null});
+      applyRecurring();save();render();toast("Recurring entry added");break}
+    case "rc-del":S.recurring=S.recurring.filter(r=>r.id!==id);save();render();break;
+    case "key-create":try{const j=await api("/api/account","POST",{action:"keys-create",label:$("#k-label").value.trim()||"API key"});ui.newKey=j.key;ui.keys=null;render()}catch(e){toast(e.message)}break;
+    case "key-revoke":try{await api("/api/account","POST",{action:"keys-revoke",id:id});ui.keys=null;render()}catch(e){toast(e.message)}break;
+    case "pw-change":{
+      const err=$("#pw-err");err.textContent="";
+      try{await api("/api/account","POST",{action:"password",current:$("#pw-c").value,next:$("#pw-n").value});$("#pw-c").value="";$("#pw-n").value="";toast("Password changed")}catch(e){err.textContent=e.message}
+      break}
+    case "acct-delete":
+      openModal("Delete your account?",'<p>This permanently deletes your account, all projects, entries, invoices, share links and API keys. Download a backup first if you need one.</p><div class="field"><label class="f" for="del-pw">Confirm with your password</label><input id="del-pw" type="password" autocomplete="current-password"></div><div class="err" id="del-err"></div><div class="foot"><button class="btn" data-a="close">Cancel</button><button class="btn danger" data-a="acct-delete-go">Delete everything</button></div>');break;
+    case "acct-delete-go":
+      try{await api("/api/account","POST",{action:"delete",current:$("#del-pw").value});try{localStorage.removeItem(KEY)}catch(e){}authMode="login";signedOut("Your account was deleted.")}catch(e){const er=$("#del-err");if(er)er.textContent=e.message}
+      break;
     case "tab":ui.tab=el.dataset.v;render();break;
     case "close":closeModal();break;
     case "start":startTimer();break;
@@ -542,7 +737,7 @@ document.addEventListener("click",async ev=>{
       confirmModal("Delete project?","This also deletes its "+n+" logged "+(n===1?"entry":"entries")+". Archiving keeps your history instead.","Delete",()=>{S.projects=S.projects.filter(p=>p.id!==id);S.entries=S.entries.filter(e=>e.projectId!==id);save();render()});break}
     case "range":ui.range=el.dataset.v;render();break;
     case "inv-copy":{const t=invoiceText();if(!(await copyText(t,"Invoice copied")))openModal("Invoice text",'<pre class="out">'+esc(t)+'</pre><div class="foot"><button class="btn" data-a="close">Close</button></div>',true);break}
-    case "inv-csv":{const [x,y]=rangeBounds(),p=proj(ui.inv);saveFile("invoice-"+p.name.replace(/\W+/g,"-").toLowerCase()+"-"+x+".csv",csvFor(S.entries.filter(e=>e.projectId===p.id&&e.billable&&e.date>=x&&e.date<=y)));break}
+    case "inv-csv":{const [x,y]=rangeBounds(),p=proj(ui.inv);saveFile("invoice-"+p.name.replace(/\W+/g,"-").toLowerCase()+"-"+x+".csv",csvFor(S.entries.filter(e=>e.projectId===p.id&&e.billable&&!e.invoiceId&&e.date>=x&&e.date<=y)));break}
     case "csv-range":{const [x,y]=rangeBounds();saveFile("timesheet-"+x+"-to-"+y+".csv",csvFor(S.entries.filter(e=>e.date>=x&&e.date<=y)));break}
     case "csv-all":saveFile("timesheet-all.csv",csvFor(S.entries));break;
     case "backup":saveFile("timesheet-backup-"+today()+".json",JSON.stringify(S,null,2));break;
@@ -557,9 +752,10 @@ document.addEventListener("change",ev=>{
   if(t.id==="file"&&t.files[0]){
     const f=t.files[0],r=new FileReader();
     r.onload=()=>{try{const o=JSON.parse(r.result);if(!Array.isArray(o.projects)||!Array.isArray(o.entries))throw 0;
-      confirmModal("Restore backup?","This replaces everything currently in this browser with "+o.projects.length+" projects and "+o.entries.length+" entries.","Restore",()=>{const d=defaults();S={projects:o.projects,entries:o.entries,timer:null,settings:Object.assign(d.settings,o.settings||{})};save();render();toast("Backup restored")})}
+      confirmModal("Restore backup?","This replaces everything currently in this browser with "+o.projects.length+" projects and "+o.entries.length+" entries.","Restore",()=>{const d=defaults();S=norm({projects:o.projects,entries:o.entries,invoices:o.invoices||[],recurring:o.recurring||[],timer:null,settings:Object.assign(d.settings,o.settings||{})});save();render();toast("Backup restored")})}
       catch(e){toast("That file isn't a Timesheet backup")}};
     r.readAsText(f);return}
+  if(t.id&&t.id.indexOf("b-")===0){const k=t.id.slice(2),bz=S.settings.biz;bz[k]=["taxRate","dueDays","nextNo"].indexOf(k)>=0?(Math.max(0,Number(t.value))||0):t.value.trim();save();return}
   if(t.id==="s-cur"){S.settings.currency=t.value.trim()||"$";save();render()}
   else if(t.id==="s-target"){S.settings.target=Math.max(1,Math.min(168,parseFloat(t.value)||40));save();render()}
   else if(t.id==="s-ws"){S.settings.weekStart=+t.value;save();render()}
@@ -570,6 +766,7 @@ document.addEventListener("input",ev=>{
   const t=ev.target;
   if(t.id==="td"&&S.timer){S.timer.desc=t.value;save()}
   if(t.id==="inv-n")ui.invNo=t.value;
+  if(t.id==="ask-q")ui.askQ=t.value;
   if(t.id==="ai-t")ui.aiText=t.value;
 });
 document.addEventListener("keydown",ev=>{
@@ -588,6 +785,7 @@ setInterval(()=>{
   if(Math.floor(runningSecs())%30===0)renderHeader();
 },1000);
 boot();
+try{if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}catch(e){}
 })();
 </script>
 </body>

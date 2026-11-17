@@ -1,0 +1,13 @@
+{
+  "name": "Timesheet",
+  "short_name": "Timesheet",
+  "description": "Track time by project, invoice clients, and let AI log your hours.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#1f6f5c",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
