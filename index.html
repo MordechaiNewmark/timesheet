@@ -157,7 +157,7 @@ async function hydrate(){
 }
 try{localStorage.setItem(KEY+".t","1");localStorage.removeItem(KEY+".t")}catch(e){storageOK=false}
 
-const ui={tab:"track",wk:null,range:"week",from:"",to:"",inv:"",invNo:"",showAll:false};
+const ui={tab:"track",wk:null,range:"week",from:"",to:"",inv:"",invNo:"",showAll:false,aiText:""};
 
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
@@ -264,6 +264,7 @@ function viewTrack(){
    +'<div class="row"><label class="chk"><input type="checkbox" id="tb" '+((t?t.billable:true)?"checked":"")+(t?" disabled":"")+"> Billable</label>"
    +(t?'<button class="btn primary" data-a="stop" style="min-width:150px">Stop &amp; save</button><button class="btn ghost" data-a="discard">Discard</button>':'<button class="btn primary" data-a="start" style="min-width:150px">▶ Start timer</button>')
    +'</div><p class="muted small" style="margin:14px 0 0">Today <b style="color:var(--ink)">'+hm(td+runningSecs())+"</b> logged</p></section>";
+  h+='<section class="card"><h2>Quick add with AI</h2><label class="f" for="ai-t">Describe your time in plain words</label><textarea id="ai-t" rows="3" maxlength="4000" placeholder="e.g. Yesterday 2h on Brand website homepage layout, and 90 min on the retainer reporting this morning">'+esc(ui.aiText)+'</textarea><div class="row" style="margin-top:10px"><button class="btn primary" data-a="ai-parse" id="ai-b">Parse &amp; preview</button><span class="muted small">You review everything before it is saved.</span></div></section>';
   h+='<section class="card"><h2>Add time manually</h2><div class="row" style="align-items:flex-end"><div style="width:150px"><label class="f" for="md">Date</label><input type="date" id="md" value="'+today()+'"></div><div class="grow"><label class="f" for="mp">Project</label><select id="mp">'+act.map(p=>'<option value="'+p.id+'">'+esc(p.name)+"</option>").join("")+'</select></div><div style="width:110px"><label class="f" for="mt">Time</label><input id="mt" placeholder="1:30" inputmode="text"></div></div><div class="row" style="margin-top:10px;align-items:flex-end"><div class="grow"><label class="f" for="mx">Description</label><input id="mx" maxlength="140" placeholder="Optional"></div><label class="chk" style="padding-bottom:10px"><input type="checkbox" id="mb" checked> Billable</label><button class="btn primary" data-a="add-manual">Add</button></div><div class="err" id="merr"></div><p class="muted small" style="margin:0">Accepts 1:30, 1.5, 90m or 1h30m.</p></section>';
   const dates=[...new Set(S.entries.map(e=>e.date))].sort().reverse();
   const shown=ui.showAll?dates:dates.slice(0,7);
@@ -403,6 +404,35 @@ function stopTimer(){
   if(secs>=1){S.entries.push({id:uid(),projectId:t.projectId,date:ymd(new Date(t.start)),secs:secs,desc:t.desc,billable:t.billable,created:Date.now()});toast("Saved "+hm(secs)+" to "+((proj(t.projectId)||{}).name||"project"))}
   save();render();
 }
+let pendingAI=null;
+async function aiParse(){
+  const text=ui.aiText.trim(),b=$("#ai-b");
+  if(!text){toast("Type something to parse first");return}
+  b.disabled=true;b.textContent="Reading…";
+  try{
+    const r=await fetch("/api/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text,today:today(),projects:S.projects.filter(p=>!p.archived).map(p=>p.name)})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error||"Request failed");
+    if(!j.entries.length){toast("No time entries found in that text");return}
+    pendingAI=j;
+    const find=n=>S.projects.find(p=>p.name.toLowerCase()===n.toLowerCase());
+    const newNames=new Set(j.entries.map(e=>e.project).filter(n=>!find(n)).map(n=>n.toLowerCase()));
+    openModal("Review before adding",'<p class="muted small" style="margin-top:0">'+j.entries.length+" entries"+(newNames.size?", "+newNames.size+" new project"+(newNames.size>1?"s":"")+" will be created":"")+'.</p><div style="max-height:45vh;overflow:auto">'+j.entries.map(e=>'<div class="entry"><div class="t"><b>'+esc(e.project)+(find(e.project)?"":'<span class="tag" style="display:inline">new</span>')+(e.billable?"":'<span class="tag" style="display:inline">non-billable</span>')+"</b><span>"+esc(e.date)+" · "+(esc(e.description)||"No description")+'</span></div><div class="d">'+hm(e.minutes*60)+"</div></div>").join("")+'</div><div class="foot"><button class="btn" data-a="close">Cancel</button><button class="btn primary" data-a="ai-apply">Add all</button></div>',true);
+  }catch(e){toast("AI parse failed: "+(e.message||"error"))}
+  finally{const nb=$("#ai-b");if(nb){nb.disabled=false;nb.textContent="Parse & preview"}}
+}
+function aiApply(){
+  const j=pendingAI;if(!j)return;
+  const find=n=>S.projects.find(p=>p.name.toLowerCase()===n.toLowerCase());
+  const meta=new Map((j.new_projects||[]).map(p=>[p.name.toLowerCase(),p]));
+  let n=0;
+  j.entries.forEach(e=>{
+    let p=find(e.project);
+    if(!p){const m=meta.get(e.project.toLowerCase())||{};p={id:uid(),name:e.project,client:m.client||"",rate:m.rate||0,budget:0,color:COLORS[S.projects.length%COLORS.length],archived:false};S.projects.push(p)}
+    S.entries.push({id:uid(),projectId:p.id,date:e.date,secs:e.minutes*60,desc:e.description,billable:e.billable,created:Date.now()+n});n++;
+  });
+  pendingAI=null;ui.aiText="";save();closeModal();render();toast("Added "+n+(n===1?" entry":" entries"));
+}
 function readEntryForm(){
   const secs=parseDur($("#e-t").value),d=$("#e-d").value;
   if(!d){$("#e-err").textContent="Pick a date.";return null}
@@ -436,6 +466,8 @@ document.addEventListener("click",async ev=>{
       const v=readEntryForm();if(!v)break;
       if(id){Object.assign(S.entries.find(e=>e.id===id),v)}else S.entries.push(Object.assign({id:uid(),created:Date.now()},v));
       save();closeModal();render();break}
+    case "ai-parse":aiParse();break;
+    case "ai-apply":aiApply();break;
     case "show-all":ui.showAll=!ui.showAll;render();break;
     case "wk-prev":ui.wk=addDays(weekRange()[0],-7);render();break;
     case "wk-next":ui.wk=addDays(weekRange()[0],7);render();break;
@@ -484,6 +516,7 @@ document.addEventListener("input",ev=>{
   const t=ev.target;
   if(t.id==="td"&&S.timer){S.timer.desc=t.value;save()}
   if(t.id==="inv-n")ui.invNo=t.value;
+  if(t.id==="ai-t")ui.aiText=t.value;
 });
 document.addEventListener("keydown",ev=>{
   if(ev.key==="Escape")closeModal();
